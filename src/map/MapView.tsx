@@ -49,7 +49,7 @@ export default function MapView() {
     map.addControl(
       new AttributionControl({
         compact: true,
-        customAttribution: 'Road times <a href="https://openrouteservice.org" target="_blank" rel="noreferrer">openrouteservice</a> by HeiGIT · Search <a href="https://photon.komoot.io" target="_blank" rel="noreferrer">Photon</a>',
+        customAttribution: 'Road times and search <a href="https://openrouteservice.org" target="_blank" rel="noreferrer">openrouteservice</a> by HeiGIT · Search without a key <a href="https://photon.komoot.io" target="_blank" rel="noreferrer">Photon</a>',
       }),
       'bottom-right',
     );

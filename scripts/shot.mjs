@@ -12,7 +12,8 @@ page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && lo
 page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
 const q = new URLSearchParams({ debug: '' });
 if (args.blank) q.set('style', 'blank');
-await page.goto(`http://localhost:4173${args.path ?? '/'}?${q}`);
+// --site=https://… checks a deployed copy instead of the local preview.
+await page.goto(`${args.site ?? `http://localhost:4173${args.path ?? '/'}`}?${q}`);
 if (args.demo) await page.getByRole('button', { name: 'Try the demo' }).click();
 await page.waitForFunction(() => window.__w2l?.map?.loaded(), null, { timeout: 30000 });
 if (args.demo) await page.waitForFunction(() => window.__w2l.resultStore.getState().frame, null, { timeout: 30000 });
