@@ -89,7 +89,7 @@ export interface Candidate {
 /** combined = the total; balanced = the total plus half the gap between people; fairest = the busier person. */
 export type View = { kind: 'balanced' } | { kind: 'combined' } | { kind: 'fairest' } | { kind: 'person'; id: Id };
 export type BandStyle = 'bands' | 'cells' | 'smooth';
-export type PaletteId = 'ylgnbu' | 'viridis' | 'magma';
+export type PaletteId = 'ylgnbu' | 'ylgn' | 'viridis' | 'magma';
 
 export interface Settings {
   /** per-person: each traveller's time counts (two people in one car = double). household: a shared trip counts once. */

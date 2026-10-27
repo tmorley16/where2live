@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { resultStore, type Result } from '../compute/engine';
 import type { Scenario } from '../domain/types';
 import { appStore } from '../state/appStore';
+import { lookStore, type Look } from '../state/look';
 import { scenarioStore } from '../state/scenarioStore';
 import { uiStore } from '../state/uiStore';
 
@@ -28,4 +29,8 @@ export function useUI<T>(select: (u: UI) => T): T {
 
 export function useResult<T>(select: (r: Result) => T): T {
   return useStore(resultStore, select);
+}
+
+export function useLook(): Look {
+  return useStore(lookStore, (l) => l.look);
 }

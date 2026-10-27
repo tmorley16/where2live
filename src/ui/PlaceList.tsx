@@ -6,7 +6,7 @@ import type { LonLat, Place, PlaceCategory, Scenario } from '../domain/types';
 import { uiStore } from '../state/uiStore';
 import { addPlace, addTrip, removePlace, setCategory, toggleAnyOf, updatePlace } from './actions';
 import { AnyBranch } from './AnyBranch';
-import { useApp, useResult, useUI } from './hooks';
+import { useApp, useLook, useResult, useUI } from './hooks';
 import { PlaceSearch } from './PlaceSearch';
 import { TripRow } from './TripRow';
 
@@ -14,6 +14,7 @@ const QUICK_ADD: PlaceCategory[] = ['work', 'church', 'gym', 'shopping', 'servic
 
 function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenario; fresh: boolean }) {
   const [changing, setChanging] = useState(false);
+  const warm = useLook() === 'warm';
   const picking = useUI((u) => u.picking === place.id);
   const near = useResult((r) => r.area?.centre) ?? scenario.region.centre;
   const trips = scenario.trips.filter((t) => t.placeIds[0] === place.id);
@@ -78,7 +79,7 @@ function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenari
       ) : (
         <div className="place-where">
           <span className="addr" title={place.address ?? 'Placed on the map'}>
-            {place.address ?? `Pinned at ${place.location![1].toFixed(4)}, ${place.location![0].toFixed(4)}`}
+            {place.address ?? (warm ? 'Pinned on the map' : `Pinned at ${place.location![1].toFixed(4)}, ${place.location![0].toFixed(4)}`)}
           </span>
           <button type="button" className="link" onClick={() => setChanging(true)}>
             Change
