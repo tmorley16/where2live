@@ -37,10 +37,31 @@ export const CATEGORIES: Record<PlaceCategory, { label: string; glyph: string }>
   study: { label: 'Study', glyph: 'S' },
   church: { label: 'Church', glyph: '✝' },
   gym: { label: 'Gym', glyph: 'G' },
-  shopping: { label: 'Shopping', glyph: '$' },
+  shopping: { label: 'Supermarket', glyph: '$' },
   social: { label: 'Friends', glyph: '♥' },
   family: { label: 'Family', glyph: 'F' },
+  service: { label: 'Chain or service', glyph: '+' },
   other: { label: 'Other', glyph: '•' },
 };
 
-export const CATEGORY_ORDER: PlaceCategory[] = ['work', 'study', 'church', 'gym', 'shopping', 'social', 'family', 'other'];
+export const CATEGORY_ORDER: PlaceCategory[] = ['work', 'study', 'church', 'gym', 'shopping', 'service', 'social', 'family', 'other'];
+
+/**
+ * Whether a kind of place is "any branch": somewhere any of several equivalent locations will do.
+ * always = supermarkets (any Woolworths, Coles or Aldi) and chains or services (any chemist, any post office);
+ * optional = a gym (any of your chain, or one gym) or anything else; never = work, church, friends, family.
+ */
+export const BRANCHING: Record<PlaceCategory, 'always' | 'optional' | 'never'> = {
+  work: 'never',
+  study: 'never',
+  church: 'never',
+  gym: 'optional',
+  shopping: 'always',
+  social: 'never',
+  family: 'never',
+  service: 'always',
+  other: 'optional',
+};
+
+/** The supermarket chains ticked for a new supermarket. */
+export const DEFAULT_SUPERMARKETS = ['Woolworths', 'Coles', 'Aldi'];

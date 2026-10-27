@@ -1,4 +1,4 @@
-import { CATEGORY_ORDER, MODE_ORDER, BAND_ORDER } from './modes';
+import { BAND_ORDER, BRANCHING, CATEGORY_ORDER, DEFAULT_SUPERMARKETS, MODE_ORDER } from './modes';
 import { defaultSettings } from './presets';
 import type { Place, Scenario } from './types';
 
@@ -32,6 +32,20 @@ export function parseScenario(raw: unknown): Scenario | null {
     ...(typeof p.address === 'string' ? { address: p.address } : {}),
     ...(p.anyOf ? { anyOf: anyOf(p.anyOf) } : {}),
   }));
+  // Supermarkets and services are always "any branch" (since 28 Oct 2026): an older single supermarket keeps its
+  // pin as one branch and gets the usual chains; "any branch" on a kind that can't branch goes back to one place.
+  for (const p of places as Place[]) {
+    const rule = BRANCHING[p.category];
+    if (rule === 'always' && !p.anyOf) {
+      p.anyOf = {
+        chains: p.category === 'shopping' ? [...DEFAULT_SUPERMARKETS] : [],
+        options: p.location ? [{ id: `${p.id}-pin`, name: p.address?.split(',').slice(0, 2).join(',') || p.name, location: p.location }] : [],
+      };
+    } else if (rule === 'never' && p.anyOf) {
+      p.location ??= p.anyOf.options[0]?.location ?? null;
+      delete p.anyOf;
+    }
+  }
   const band = (x: unknown) => (isObj(x) && BAND_ORDER.includes(x.band as never) ? { band: x.band as Scenario['trips'][number]['out']['band'], ...(typeof x.multiplier === 'number' ? { multiplier: x.multiplier } : {}) } : { band: 'offpeak' as const });
   const trips = raw.trips.filter(isObj).filter((t) => typeof t.id === 'string' && Array.isArray(t.placeIds)).map((t) => {
     const f = isObj(t.frequency) ? t.frequency : {};

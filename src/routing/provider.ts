@@ -21,8 +21,11 @@ export interface FieldProvider {
   get(spec: FieldSpec, window: GridWindow, ids: Float64Array): DenseField;
   /** Called with the spec keys whose data changed ('*mask' when only the mask did). */
   subscribe(listener: (specKeys: string[]) => void): () => void;
-  /** What the map needs now: the window and every field, with its weight (for fetching the biggest first). */
-  need?(window: GridWindow, ids: Float64Array, specs: Map<string, { spec: FieldSpec; weight: number }>): void;
+  /**
+   * What the map needs now: the window and every field, with its weight (for fetching the biggest first). `focus`
+   * (1 per window point) limits "any branch" fields to the promising part of the map.
+   */
+  need?(window: GridWindow, ids: Float64Array, specs: Map<string, { spec: FieldSpec; weight: number }>, focus?: Uint8Array): void;
   /** Points where no one can live (no road nearby), 1 = masked. */
   mask?(window: GridWindow, ids: Float64Array): Uint8Array | null;
   /** Places the router can't reach, by spec key, with a reason. */

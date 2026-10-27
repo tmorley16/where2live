@@ -170,12 +170,6 @@ export class Engine {
         this.info.delete(k);
       }
     }
-    // Tell the provider what's needed, biggest weekly weight first. Not while dragging: a drag never fetches.
-    if (!dragging && this.provider.need) {
-      const needs = new Map<string, { spec: FieldSpec; weight: number }>();
-      for (const [k, spec] of forms.specs) needs.set(k, { spec, weight: Math.abs(forms.combined.coef.get(k) ?? 0) });
-      this.provider.need(w, this.ids, needs);
-    }
     let estimate = true;
     let provisional = 0;
     for (const [k, spec] of forms.specs) {
@@ -191,6 +185,18 @@ export class Engine {
     const values = viewValues(forms, s.settings.view, this.dense, w.nx * w.ny);
     applyMask(values, this.combinedMask());
     const st = stats(values);
+    // Tell the provider what's needed, biggest weekly weight first. Not while dragging: a drag never fetches.
+    // "Any branch" places get road times only where the map is promising (the better 40%), unless set otherwise.
+    if (!dragging && this.provider.need) {
+      const needs = new Map<string, { spec: FieldSpec; weight: number }>();
+      for (const [k, spec] of forms.specs) needs.set(k, { spec, weight: Math.abs(forms.combined.coef.get(k) ?? 0) });
+      let focus: Uint8Array | undefined;
+      if (s.settings.branchRouting !== 'all' && Number.isFinite(st.p40)) {
+        focus = new Uint8Array(values.length);
+        for (let i = 0; i < values.length; i++) focus[i] = values[i] <= st.p40 ? 1 : 0;
+      }
+      this.provider.need(w, this.ids, needs, focus);
+    }
     const { mode, step } = s.settings.bands;
     const palette = s.settings.display.palette;
     // While dragging, keep the band edges so colours keep their meaning, unless the values drift well outside them.

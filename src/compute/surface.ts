@@ -32,6 +32,8 @@ export interface Stats {
   min: number;
   max: number;
   p90: number;
+  /** 40th percentile: the better 40% of the map is at or below it. */
+  p40: number;
   /** Element index of the best point, −1 if none. */
   argmin: number;
   valid: number;
@@ -57,10 +59,10 @@ export function stats(values: Float32Array): Stats {
     }
     if (v > max) max = v;
   }
-  if (valid === 0) return { min: Number.NaN, max: Number.NaN, p90: Number.NaN, argmin: -1, valid };
+  if (valid === 0) return { min: Number.NaN, max: Number.NaN, p90: Number.NaN, p40: Number.NaN, argmin: -1, valid };
   const sorted = new Float32Array(valid);
   let k = 0;
   for (let i = 0; i < values.length; i++) if (Number.isFinite(values[i])) sorted[k++] = values[i];
   sorted.sort();
-  return { min, max, p90: sorted[Math.floor(0.9 * (valid - 1))], argmin, valid };
+  return { min, max, p90: sorted[Math.floor(0.9 * (valid - 1))], p40: sorted[Math.floor(0.4 * (valid - 1))], argmin, valid };
 }

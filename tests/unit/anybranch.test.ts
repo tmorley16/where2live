@@ -207,3 +207,47 @@ describe('finding a chain’s branches (Photon)', () => {
     expect(options.length).toBe(50);
   });
 });
+
+describe('which places branch', () => {
+  it('starts a supermarket with Woolworths, Coles and Aldi ticked, and leaves work as one place', async () => {
+    const { newPlace } = await import('../../src/domain/presets');
+    expect(newPlace('Supermarket', 'shopping').anyOf?.chains).toEqual(['Woolworths', 'Coles', 'Aldi']);
+    expect(newPlace('Chemist', 'service').anyOf?.chains).toEqual([]);
+    expect(newPlace('Gym', 'gym').anyOf).toBeUndefined();
+    expect(newPlace('Work', 'work').anyOf).toBeUndefined();
+  });
+
+  it('turns an older single supermarket into one with the usual chains, keeping its pin as a branch', () => {
+    const s = scenarioWithShops();
+    s.places[1] = { id: 'old', name: 'Shops', category: 'shopping', location: [151.1, -33.8] };
+    const back = parseScenario(JSON.parse(JSON.stringify(s)))!;
+    expect(back.places[1].anyOf?.chains).toEqual(['Woolworths', 'Coles', 'Aldi']);
+    expect(back.places[1].anyOf?.options[0].location).toEqual([151.1, -33.8]);
+    expect(back.settings.branchRouting).toBe('focus');
+  });
+});
+
+describe('focusing any-branch road times on the promising part of the map', () => {
+  const [cx, cy] = toMercator([151.15, -33.84]);
+  const w = windowFor([cx - 5000, cy - 5000, cx + 5000, cy + 5000], LEVEL.standard);
+  const ids = windowIds(w);
+  const branches: LonLat[] = Array.from({ length: 12 }, (_, i) => [151.1 + (i % 4) * 0.03, -33.88 + Math.floor(i / 4) * 0.035]);
+  const spec: FieldSpec = { mode: 'car', dir: 'to', targets: branches };
+
+  it('routes only focused homes, and doesn’t wait on the rest', async () => {
+    const routes = async (focus?: Uint8Array) => {
+      const fake = fakeOrs();
+      const statuses: JobStatus[] = [];
+      const p = new OrsProvider({ key: () => 'K', kv: { fields: new MemoryKV(), snaps: new MemoryKV() }, fetchImpl: fake.fetchImpl, planDelay: 0, onStatus: (s) => statuses.push(s) });
+      p.need(w, ids, new Map([[specKey(spec), { spec, weight: 1 }]]), focus);
+      await settle(statuses);
+      return { n: fake.matrices.reduce((a, m) => a + m.sources, 0), d: p.get(spec, w, ids) };
+    };
+    const all = await routes();
+    const half = new Uint8Array(ids.length).map((_, k) => (k % w.nx < w.nx / 2 ? 1 : 0)); // the west half
+    const some = await routes(half);
+    expect(some.n).toBeLessThan(all.n * 0.6);
+    expect(some.d.provisional).toBe(0);
+    expect(some.d.estimate).toBe(false);
+  });
+});

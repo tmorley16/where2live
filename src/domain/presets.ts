@@ -1,4 +1,4 @@
-import { DEFAULT_MULTIPLIERS } from './modes';
+import { BRANCHING, DEFAULT_MULTIPLIERS, DEFAULT_SUPERMARKETS } from './modes';
 import type { Frequency, Id, LonLat, ModeId, Person, Place, PlaceCategory, Scenario, Settings, TimeBand, Trip } from './types';
 
 export function newId(): Id {
@@ -18,6 +18,7 @@ export function defaultSettings(): Settings {
     area: { mode: 'auto' },
     bands: { mode: 'absolute', step: 'auto' },
     display: { style: 'bands', palette: 'ylgnbu', opacity: 0.6, edges: false },
+    branchRouting: 'focus',
   };
 }
 
@@ -37,6 +38,7 @@ export const CATEGORY_DEFAULTS: Record<PlaceCategory, CategoryDefault> = {
   shopping: { frequency: { count: 1, per: 'week' }, who: 'all', band: 'weekend' },
   social: { frequency: { count: 2, per: 'month' }, who: 'all', band: 'weekend' },
   family: { frequency: { count: 2, per: 'month' }, who: 'all', band: 'weekend' },
+  service: { frequency: { count: 2, per: 'month' }, who: 'one', band: 'offpeak' },
   other: { frequency: { count: 1, per: 'week' }, who: 'all', band: 'offpeak' },
 };
 
@@ -44,8 +46,11 @@ export function newPerson(name: string, index: number): Person {
   return { id: newId(), name, colour: PERSON_COLOURS[index % PERSON_COLOURS.length] };
 }
 
+/** A new place. Supermarkets and services are always "any branch" (supermarkets start with Woolworths, Coles and Aldi). */
 export function newPlace(name: string, category: PlaceCategory, location: LonLat | null = null, address?: string): Place {
-  return { id: newId(), name, category, location, address };
+  const p: Place = { id: newId(), name, category, location, address };
+  if (BRANCHING[category] === 'always') p.anyOf = { chains: category === 'shopping' ? [...DEFAULT_SUPERMARKETS] : [], options: [] };
+  return p;
 }
 
 /** A trip to `place` using its category's defaults. `traveller` is who goes when the default is one person. */
@@ -91,7 +96,25 @@ export function demoScenario(): Scenario {
   const alexWork = place('Alex’s work, Wynyard', 'work', 151.2057, -33.8657);
   const church = place('Church, Chatswood', 'church', 151.181, -33.7966);
   const gym = place('Gym, Macquarie Centre', 'gym', 151.1205, -33.7765);
-  const shops = place('Supermarket, Top Ryde', 'shopping', 151.106, -33.813);
+  // Any Woolworths, Coles or Aldi nearby: a few real stores, so the demo needs no search.
+  const shops = newPlace('Supermarket', 'shopping');
+  const store = (name: string, chain: string, lon: number, lat: number) => ({ id: newId(), name, location: [lon, lat] as LonLat, chain });
+  shops.anyOf = {
+    chains: [...DEFAULT_SUPERMARKETS],
+    searched: [140, -45, 160, -25],
+    options: [
+      store('Woolworths, Burwood', 'Woolworths', 151.10197, -33.87746),
+      store('Woolworths, Chatswood', 'Woolworths', 151.19811, -33.78634),
+      store('Woolworths, Sydney', 'Woolworths', 151.2073, -33.87327),
+      store('Coles, Lane Cove', 'Coles', 151.16926, -33.81353),
+      store('Coles, Five Dock', 'Coles', 151.12906, -33.86784),
+      store('Coles, Macquarie Park', 'Coles', 151.12108, -33.77796),
+      store('Aldi, Chatswood', 'Aldi', 151.18816, -33.79509),
+      store('Aldi, Eastwood', 'Aldi', 151.08468, -33.791),
+      store('Aldi, North Strathfield', 'Aldi', 151.08797, -33.86357),
+      store('Aldi, North Sydney', 'Aldi', 151.20852, -33.83917),
+    ],
+  };
   const parra = place('Friends, Parramatta', 'social', 151.003, -33.815);
   const bondi = place('Friends, Bondi', 'social', 151.274, -33.891);
   const family = place('Family, Wollongong', 'family', 150.893, -34.425);

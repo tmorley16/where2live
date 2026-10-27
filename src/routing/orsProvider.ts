@@ -122,6 +122,8 @@ export class OrsProvider implements FieldProvider {
   /** For "any branch" specs: each window point's candidate branches. */
   private cands = new Map<string, { ids: Float64Array; list: number[][] }>();
   private needs: { window: GridWindow; ids: Float64Array; specs: Map<string, { spec: FieldSpec; weight: number }> } | null = null;
+  /** The promising part of the window (1 per point), where "any branch" fields get road times; none = everywhere. */
+  private focus: Uint8Array | undefined;
   private needSig = '';
   private declinedSig = '';
   private confirmedSig = '';
@@ -185,6 +187,8 @@ export class OrsProvider implements FieldProvider {
     const cands = this.candidates(spec, ids);
     const mask = this.mask(w, ids);
     const known = new FieldData();
+    let incomplete = 0;
+    const focus = this.focus?.length === ids.length ? this.focus : undefined;
     for (let k = 0; k < ids.length; k++) {
       if (mask?.[k]) continue;
       let best = Infinity;
@@ -198,13 +202,14 @@ export class OrsProvider implements FieldProvider {
         if (v < best) best = v; // NaN (no route to that branch) never wins
       }
       if (complete) known.values.set(ids[k], best === Infinity ? Number.NaN : best);
+      else if (!focus || focus[k]) incomplete++; // outside the focus the estimate stands: not waiting for anything
     }
     const d = densify(w, ids, known, estimateField(spec, ids), mask);
     if (known.size > 0) {
       fillIsolatedGaps(d.values, w.nx, w.ny, mask ?? undefined);
       if (d.provisional === 0) despike(d.values, w.nx, w.ny);
     }
-    return { values: d.values, provisional: d.provisional, estimate: known.size === 0 };
+    return { values: d.values, provisional: Math.min(d.provisional, incomplete), estimate: known.size === 0 };
   }
 
   private candidates(spec: FieldSpec, ids: Float64Array): number[][] {
@@ -258,8 +263,9 @@ export class OrsProvider implements FieldProvider {
     return this.failed;
   }
 
-  need(window: GridWindow, ids: Float64Array, specs: Map<string, { spec: FieldSpec; weight: number }>): void {
+  need(window: GridWindow, ids: Float64Array, specs: Map<string, { spec: FieldSpec; weight: number }>, focus?: Uint8Array): void {
     this.needs = { window, ids, specs };
+    this.focus = focus && focus.length === ids.length ? focus : undefined;
     const sig = `${windowKey(window)}|${[...specs.keys()].sort().join(',')}`;
     if (sig !== this.needSig) {
       // Something real changed: plan once edits settle (the timer restarts with each change).
@@ -427,7 +433,8 @@ export class OrsProvider implements FieldProvider {
     const byId = new Map<number, number>();
     ids.forEach((id, k) => byId.set(id, k));
     for (const [onIt, base] of levels) {
-      const order = zOrder(Array.from(ids).filter((id) => usable(id) && onIt(id)));
+      const focus = this.focus;
+      const order = zOrder(Array.from(ids).filter((id) => usable(id) && onIt(id) && (!focus || focus[byId.get(id)!] === 1)));
       let pts: number[] = [];
       let opts = new Set<number>();
       const emit = () => {

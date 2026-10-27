@@ -13,7 +13,7 @@ const COLES = {
     .concat([{ type: 'Feature', geometry: { type: 'Point', coordinates: [151.15, -33.85] }, properties: { name: 'Coles Express', osm_key: 'amenity', osm_value: 'fuel', osm_type: 'N', osm_id: 9, district: 'Hunters Hill' } }]),
 };
 
-test('a supermarket that can be any Coles: branches are found, and each home counts its nearest', async ({ page }) => {
+test('a supermarket is any Woolworths, Coles or Aldi from the start; each home counts its nearest', async ({ page }) => {
   await page.route('https://photon.komoot.io/**', (route) => {
     const q = new URL(route.request().url()).searchParams.get('q') ?? '';
     return route.fulfill({ json: /coles/i.test(q) ? COLES : PHOTON_WYNYARD });
@@ -26,11 +26,17 @@ test('a supermarket that can be any Coles: branches are found, and each home cou
   await page.getByRole('option', { name: /Wynyard Station/ }).click();
   await waitForFrame(page);
 
-  await page.getByRole('button', { name: '+ Shopping' }).click();
+  await page.getByRole('button', { name: '+ Supermarket' }).click();
   const shops = page.getByRole('region', { name: 'Supermarket' });
-  await shops.getByRole('button', { name: 'Any branch' }).click();
-  await shops.getByRole('button', { name: 'Coles', exact: true }).click();
+  // No toggle for a supermarket: the usual chains are ticked and searched straight away.
+  await expect(shops.getByRole('button', { name: 'Any branch' })).toHaveCount(0);
+  for (const c of ['Woolworths', 'Coles', 'Aldi']) await expect(shops.getByRole('button', { name: c, exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(shops.getByText('3 branches: each home counts its quickest one')).toBeVisible();
+  await expect(shops.getByText(/No Woolworths or Aldi branches/)).toBeVisible(); // the stub only knows Coles
+  // Work has no toggle either; a gym does.
+  await expect(page.getByRole('region', { name: 'Work' }).getByRole('button', { name: 'Any branch' })).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Gym' }).click();
+  await expect(page.getByRole('region', { name: 'Gym' }).getByRole('button', { name: 'Any branch' })).toHaveCount(1);
   const s = await scenario(page);
   const shopsPlace = (s as unknown as { places: { anyOf?: { options: { name: string }[] } }[] }).places[1];
   expect(shopsPlace.anyOf!.options.map((o) => o.name).sort()).toEqual(['Coles, Chatswood', 'Coles, Ryde', 'Coles, Sydney']);
@@ -44,5 +50,7 @@ test('a supermarket that can be any Coles: branches are found, and each home cou
 
   // Leaving the chain out removes its branches.
   await shops.getByRole('button', { name: 'Coles', exact: true }).click();
+  await shops.getByRole('button', { name: 'Woolworths', exact: true }).click();
+  await shops.getByRole('button', { name: 'Aldi', exact: true }).click();
   await expect(shops.getByText('No branches yet')).toBeVisible();
 });

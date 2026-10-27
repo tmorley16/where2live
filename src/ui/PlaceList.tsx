@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { legSpec, specKey } from '../domain/fields';
 import { placeTargets } from '../domain/formula';
-import { CATEGORIES, CATEGORY_ORDER, MODES } from '../domain/modes';
+import { BRANCHING, CATEGORIES, CATEGORY_ORDER, MODES } from '../domain/modes';
 import type { LonLat, Place, PlaceCategory, Scenario } from '../domain/types';
 import { uiStore } from '../state/uiStore';
-import { addPlace, addTrip, removePlace, toggleAnyOf, updatePlace } from './actions';
+import { addPlace, addTrip, removePlace, setCategory, toggleAnyOf, updatePlace } from './actions';
 import { AnyBranch } from './AnyBranch';
 import { useApp, useResult, useUI } from './hooks';
 import { PlaceSearch } from './PlaceSearch';
 import { TripRow } from './TripRow';
 
-const QUICK_ADD: PlaceCategory[] = ['work', 'church', 'gym', 'shopping', 'social', 'family', 'other'];
+const QUICK_ADD: PlaceCategory[] = ['work', 'church', 'gym', 'shopping', 'service', 'social', 'family', 'other'];
 
 function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenario; fresh: boolean }) {
   const [changing, setChanging] = useState(false);
@@ -33,7 +33,7 @@ function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenari
           <span className="cat-dot" aria-hidden="true">
             {CATEGORIES[place.category].glyph}
           </span>
-          <select value={place.category} aria-label="Kind of place" onChange={(e) => updatePlace(place.id, { category: e.target.value as PlaceCategory })}>
+          <select value={place.category} aria-label="Kind of place" onChange={(e) => setCategory(place.id, e.target.value as PlaceCategory)}>
             {CATEGORY_ORDER.map((c) => (
               <option key={c} value={c}>
                 {CATEGORIES[c].label}
@@ -42,15 +42,17 @@ function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenari
           </select>
         </span>
         <input className="place-name" value={place.name} aria-label="Place name" onChange={(e) => updatePlace(place.id, { name: e.target.value })} />
+        {BRANCHING[place.category] === 'optional' && (
         <button
           type="button"
           className={`chip-toggle any-toggle${place.anyOf ? ' on' : ''}`}
           aria-pressed={!!place.anyOf}
-          title="Any branch will do (any Woolworths, Coles or Aldi; any gym of your chain): each home counts its quickest one"
+          title="Any branch will do (any gym of your chain): each home counts its quickest one"
           onClick={() => toggleAnyOf(place)}
         >
           Any branch
         </button>
+        )}
         <button type="button" className="icon-btn" aria-label={`Remove ${place.name}`} title="Remove this place" onClick={() => removePlace(place.id)}>
           ×
         </button>

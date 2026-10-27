@@ -1,3 +1,4 @@
+import { BRANCHING, DEFAULT_SUPERMARKETS } from '../domain/modes';
 import { CATEGORY_DEFAULTS, demoScenario, newId, newPerson, newPlace, newScenario, tripFor } from '../domain/presets';
 import type { Id, LonLat, Person, Place, PlaceCategory, Scenario, Trip } from '../domain/types';
 import { edit, getScenario, setScenario } from '../state/scenarioStore';
@@ -102,8 +103,29 @@ const CATEGORY_LABEL_NEW: Record<PlaceCategory, string> = {
   shopping: 'Supermarket',
   social: 'Friends',
   family: 'Family',
+  service: 'Chemist, post office…',
   other: 'New place',
 };
+
+/**
+ * Changes a place's kind. Supermarkets and services become "any branch" (a supermarket with Woolworths, Coles and
+ * Aldi ticked, its pin kept as a branch); kinds that can't branch go back to one place.
+ */
+export function setCategory(id: Id, category: PlaceCategory): void {
+  edit((d) => {
+    const p = d.places.find((x) => x.id === id);
+    if (!p) return;
+    p.category = category;
+    const rule = BRANCHING[category];
+    if (rule === 'always' && !p.anyOf) {
+      const name = p.address?.split(',').slice(0, 2).join(',') || p.name;
+      p.anyOf = { chains: category === 'shopping' ? [...DEFAULT_SUPERMARKETS] : [], options: p.location ? [{ id: newId(), name, location: p.location }] : [] };
+    } else if (rule === 'never' && p.anyOf) {
+      p.location ??= p.anyOf.options[0]?.location ?? null;
+      delete p.anyOf;
+    }
+  });
+}
 
 export function updatePlace(id: Id, patch: Partial<Place>): void {
   const firstPlaced = patch.location && !getScenario()?.places.some((p) => p.id !== id && p.location);

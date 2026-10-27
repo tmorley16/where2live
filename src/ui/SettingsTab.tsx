@@ -55,6 +55,18 @@ export function SettingsTab({ scenario }: { scenario: Scenario }) {
   return (
     <div className="settings">
       <RoutingSettings />
+      <Row label="Supermarkets and chains" hint="Road times only for the better 40% of the map (far fewer requests; elsewhere the estimate), or everywhere">
+        <Seg
+          label="Supermarkets and chains"
+          small
+          value={st.branchRouting}
+          options={[
+            { id: 'focus', label: 'Best part' },
+            { id: 'all', label: 'Everywhere' },
+          ]}
+          onChange={(v) => edit((d) => void (d.settings.branchRouting = v))}
+        />
+      </Row>
       <h3>Map</h3>
       <Row label="Style">
         <Seg<BandStyle>

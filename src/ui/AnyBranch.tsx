@@ -1,24 +1,29 @@
 import { useState } from 'react';
+import { useStore } from 'zustand';
 import { newId } from '../domain/presets';
 import type { LonLat, Place, Scenario } from '../domain/types';
-import { findBranches, mergeBranches, searchBox, SUPERMARKET_CHAINS } from '../routing/chains';
-import { edit } from '../state/scenarioStore';
+import { branchSearch, searchPlace } from '../routing/branches';
+import { mergeBranches, SUPERMARKET_CHAINS } from '../routing/chains';
+import { edit, getScenario } from '../state/scenarioStore';
 import { useResult } from './hooks';
 import { PlaceSearch } from './PlaceSearch';
 
-const EXAMPLES: Partial<Record<Place['category'], string>> = { gym: 'e.g. Revo Fitness', shopping: 'Another chain' };
+const EXAMPLES: Partial<Record<Place['category'], string>> = { gym: 'Chain, e.g. Revo Fitness', shopping: 'Another chain', service: 'e.g. Chemist Warehouse, Australia Post' };
 
-/** "Any branch will do": choose chains (found in OpenStreetMap) and add any branches the map data lacks by hand. */
+/**
+ * "Any branch will do": the chains whose branches count (found in OpenStreetMap; supermarkets start with Woolworths,
+ * Coles and Aldi ticked), plus any branches the map data lacks, added by hand.
+ */
 export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenario }) {
   const area = useResult((r) => r.area);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const status = useStore(branchSearch, (s) => s[place.id]);
   const [chainText, setChainText] = useState('');
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const any = place.anyOf!;
   const presets = place.category === 'shopping' ? SUPERMARKET_CHAINS : [];
   const custom = any.chains.filter((c) => !presets.includes(c));
+  const busy = !!status?.busy;
 
   const change = (recipe: (a: NonNullable<Place['anyOf']>) => void) =>
     edit((d) => {
@@ -26,7 +31,7 @@ export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenari
       if (p?.anyOf) recipe(p.anyOf);
     });
 
-  const toggleChain = async (chain: string) => {
+  const toggleChain = (chain: string) => {
     if (any.chains.includes(chain)) {
       change((a) => {
         a.chains = a.chains.filter((c) => c !== chain);
@@ -34,24 +39,9 @@ export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenari
       });
       return;
     }
-    setBusy(chain);
-    setNote(null);
-    try {
-      const box = searchBox(area, scenario.region.centre);
-      const { options: found, partial } = await findBranches(chain, box, presets.includes(chain) ? 'supermarket' : 'any');
-      change((a) => {
-        a.chains = [...a.chains, chain];
-        a.options = mergeBranches(a.options, found);
-        // A partial search is retried when the area next changes (it isn't marked as covering the area).
-        if (!partial) a.searched = box;
-      });
-      if (found.length === 0) setNote(`No ${chain} branches in the map data around here. Add them yourself with “Add a branch”.`);
-      else if (partial) setNote(`Found ${found.length} ${chain} branches, but the search service was busy for part of the area. Untick and tick ${chain} in a minute to fill any gaps.`);
-    } catch {
-      setNote('Search isn’t available right now. Try again in a moment, or add branches yourself.');
-    } finally {
-      setBusy(null);
-    }
+    change((a) => void (a.chains = [...a.chains, chain]));
+    const now = getScenario()?.places.find((p) => p.id === place.id);
+    if (now) void searchPlace(now, [chain]);
   };
 
   const n = any.options.length;
@@ -62,8 +52,8 @@ export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenari
           {[...presets, ...custom].map((c) => {
             const on = any.chains.includes(c);
             return (
-              <button key={c} type="button" className={`chip-toggle${on ? ' on' : ''}`} aria-pressed={on} disabled={busy !== null} onClick={() => void toggleChain(c)}>
-                {busy === c ? `${c}…` : c}
+              <button key={c} type="button" className={`chip-toggle${on ? ' on' : ''}`} aria-pressed={on} disabled={busy} onClick={() => toggleChain(c)}>
+                {c}
               </button>
             );
           })}
@@ -74,17 +64,17 @@ export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenari
         onSubmit={(e) => {
           e.preventDefault();
           const c = chainText.trim();
-          if (c && !any.chains.includes(c)) void toggleChain(c);
+          if (c && !any.chains.includes(c)) toggleChain(c);
           setChainText('');
         }}
       >
         <input value={chainText} placeholder={EXAMPLES[place.category] ?? 'Chain or brand name'} aria-label="Chain or brand name" onChange={(e) => setChainText(e.target.value)} />
-        <button type="submit" className="btn btn-sm" disabled={!chainText.trim() || busy !== null}>
+        <button type="submit" className="btn btn-sm" disabled={!chainText.trim() || busy}>
           Find
         </button>
       </form>
       <div className="anyof-summary">
-        {n === 0 ? 'No branches yet' : `${n} branch${n === 1 ? '' : 'es'}: each home counts its quickest one`}
+        {busy ? 'Finding branches…' : n === 0 ? 'No branches yet' : `${n} branch${n === 1 ? '' : 'es'}: each home counts its quickest one`}
         {n > 0 && (
           <button type="button" className="link" aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? 'Hide' : 'List'}
@@ -94,7 +84,7 @@ export function AnyBranch({ place, scenario }: { place: Place; scenario: Scenari
           {adding ? 'Done' : 'Add a branch'}
         </button>
       </div>
-      {note && <div className="place-note">{note}</div>}
+      {status?.note && !busy && <div className="place-note">{status.note}</div>}
       {adding && (
         <PlaceSearch
           near={(area?.centre ?? scenario.region.centre) as LonLat}

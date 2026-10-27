@@ -7,7 +7,7 @@ export type ModeId = 'car' | 'bike' | 'walk' | 'pt';
 /** When a leg is usually travelled. Sets the car traffic multiplier now, and the departure time for public transport later. */
 export type TimeBand = 'peak' | 'offpeak' | 'weekend' | 'night';
 export type FreqUnit = 'week' | 'fortnight' | 'month' | 'year';
-export type PlaceCategory = 'work' | 'study' | 'church' | 'gym' | 'shopping' | 'social' | 'family' | 'other';
+export type PlaceCategory = 'work' | 'study' | 'church' | 'gym' | 'shopping' | 'social' | 'family' | 'service' | 'other';
 export type Legs = 'return' | 'there-only' | 'back-only';
 
 export interface Person {
@@ -101,6 +101,11 @@ export interface Settings {
   area: { mode: 'auto' } | { mode: 'manual'; bbox: BBox };
   bands: { mode: 'absolute' | 'relative'; step: number | 'auto' };
   display: { style: BandStyle; palette: PaletteId; opacity: number; edges: boolean };
+  /**
+   * Road times for "any branch" places: only where the map is promising (the better 40% of it; elsewhere the
+   * straight-line estimate, since one short trip barely changes a poor area), or everywhere.
+   */
+  branchRouting: 'focus' | 'all';
 }
 
 export interface Scenario {
