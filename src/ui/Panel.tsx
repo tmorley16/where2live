@@ -1,7 +1,7 @@
 import { engine } from '../compute/engine';
 import { fmtDuration, fmtHoursPerYear } from '../compute/format';
 import { uiStore, type Tab } from '../state/uiStore';
-import { useResult, useScenario, useUI } from './hooks';
+import { useLook, useResult, useScenario, useUI } from './hooks';
 import { PeopleBar } from './PeopleBar';
 import { PlaceList } from './PlaceList';
 import { RoutingNotice } from './RoutingStatus';
@@ -14,15 +14,17 @@ function Summary() {
   const frame = useResult((r) => r.frame);
   const empty = useResult((r) => r.empty);
   const people = useScenario((s) => s?.people ?? []);
+  const warm = useLook() === 'warm';
   if (!frame) return empty === 'no-trips' ? <div className="summary summary-empty">Add a place you go, and where it is, to see the map.</div> : null;
   const bd = frame.best ? engine.breakdownAt(frame.best) : null;
   return (
     <div className="summary">
       <div className="summary-main">
-        Best area ≈ <strong>{fmtDuration(frame.stats.min)}</strong> a week
+        {warm ? 'Best area: ' : 'Best area ≈ '}
+        <strong>{fmtDuration(frame.stats.min)}</strong> a week
       </div>
       <div className="summary-sub">
-        {fmtHoursPerYear(frame.stats.min)}
+        {warm ? `About ${fmtDuration(frame.stats.min / 7)} a day` : fmtHoursPerYear(frame.stats.min)}
         {bd && people.length > 1 && ` · ${people.map((p) => `${p.name} ${fmtDuration(bd.persons.get(p.id) ?? 0)}`).join(' · ')}`}
       </div>
       <RoutingNotice />
@@ -42,7 +44,12 @@ export function Panel() {
   return (
     <aside className="panel">
       <header className="panel-head">
-        <h1 className="brand">Where2Live</h1>
+        <h1 className="brand">
+          <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z" />
+          </svg>
+          Where2Live
+        </h1>
         {scenario && <span className="scenario-name">{scenario.name}</span>}
       </header>
       {!scenario ? (

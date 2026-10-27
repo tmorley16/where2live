@@ -88,7 +88,7 @@ export interface Candidate {
 
 export type View = { kind: 'combined' } | { kind: 'fairest' } | { kind: 'person'; id: Id };
 export type BandStyle = 'bands' | 'cells' | 'smooth';
-export type PaletteId = 'ylgnbu' | 'viridis' | 'magma';
+export type PaletteId = 'ylgnbu' | 'ylgn' | 'viridis' | 'magma';
 
 export interface Settings {
   /** per-person: each traveller's time counts (two people in one car = double). household: a shared trip counts once. */

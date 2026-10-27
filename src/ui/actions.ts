@@ -2,15 +2,22 @@ import { BRANCHING, DEFAULT_SUPERMARKETS } from '../domain/modes';
 import { CATEGORY_DEFAULTS, demoScenario, newId, newPerson, newPlace, newScenario, tripFor } from '../domain/presets';
 import type { Id, LonLat, Person, Place, PlaceCategory, Scenario, Trip } from '../domain/types';
 import { edit, getScenario, setScenario } from '../state/scenarioStore';
+import { LOOK_PALETTE, lookStore } from '../state/look';
 import { requestFit, uiStore } from '../state/uiStore';
 
+/** New scenarios start with the map colours that suit the current look. */
+function withLookPalette(s: Scenario): Scenario {
+  s.settings.display.palette = LOOK_PALETTE[lookStore.getState().look];
+  return s;
+}
+
 export function loadDemo(): void {
-  setScenario(demoScenario());
+  setScenario(withLookPalette(demoScenario()));
   requestFit();
 }
 
 export function startOwn(centre?: LonLat, country?: string): void {
-  setScenario(newScenario(centre, country ?? ''));
+  setScenario(withLookPalette(newScenario(centre, country ?? '')));
   requestFit();
 }
 

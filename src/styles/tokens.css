@@ -28,3 +28,31 @@
   --size-sm: 12.5px;
   --size-lg: 16px;
 }
+
+/* The original look's extras: headings in the body font, near-black pins. */
+:root {
+  --font-head: var(--font);
+  --pin: #1d2125;
+}
+
+/* Warm look (the default; Settings → Look): linen and terracotta, a book-like serif for headings, softer corners.
+   Still light and flat: no shadows, glows or outlines. */
+:root[data-look='warm'] {
+  --bg: #f7f1e8;
+  --surface: #fffcf7;
+  --surface-2: #f9f2e8;
+  --line: #ece1d2;
+  --line-strong: #dccdb9;
+  --text: #2e2620;
+  --text-2: #5f5349;
+  --text-3: #8b7d71;
+  --accent: #b4532a;
+  --accent-ink: #ffffff;
+  --accent-soft: #f8e7dd;
+  --pin: #3d2f27;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  --font-head: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+}

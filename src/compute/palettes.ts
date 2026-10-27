@@ -3,6 +3,7 @@ import type { PaletteId } from '../domain/types';
 /** Eight sequential colours, best (least travel) first. All are colour-blind safe. */
 export const PALETTES: Record<PaletteId, { label: string; colours: string[] }> = {
   ylgnbu: { label: 'Blue to yellow', colours: ['#0c2c84', '#225ea8', '#1d91c0', '#41b6c4', '#7fcdbb', '#c7e9b4', '#edf8b1', '#ffffd9'] },
+  ylgn: { label: 'Green to cream', colours: ['#004529', '#006837', '#238443', '#41ab5d', '#78c679', '#addd8e', '#d9f0a3', '#ffffe5'] },
   viridis: { label: 'Viridis', colours: ['#440154', '#46327e', '#365c8d', '#277f8e', '#1fa187', '#4ac16d', '#a0da39', '#fde725'] },
   magma: { label: 'Magma', colours: ['#1c1044', '#4f127b', '#812581', '#b5367a', '#e55964', '#fb8761', '#fec287', '#fcfdbf'] },
 };

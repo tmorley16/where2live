@@ -4,14 +4,42 @@ import { BAND_ORDER, TIME_BANDS } from '../domain/modes';
 import type { BandStyle, PaletteId, Scenario } from '../domain/types';
 import { parseScenario } from '../domain/validate';
 import { edit, setScenario } from '../state/scenarioStore';
+import { LOOK_PALETTE, lookStore, setLook, type Look } from '../state/look';
 import { requestFit } from '../state/uiStore';
 import { exportScenario, loadDemo, startOwn, setAreaAuto, setAreaToView } from './actions';
 import { Row, Seg, Switch } from './controls';
 import { routing } from '../routing/wire';
-import { useApp } from './hooks';
+import { useApp, useLook } from './hooks';
 import { openKeyDialog } from './KeyDialog';
 
 const STEP_CHOICES = ['auto', 10, 15, 20, 30, 45, 60, 90, 120] as const;
+
+/** Switching look also swaps the map colours, unless they were changed by hand. */
+function chooseLook(look: Look): void {
+  const before = LOOK_PALETTE[lookStore.getState().look];
+  setLook(look);
+  edit((d) => {
+    if (d.settings.display.palette === before) d.settings.display.palette = LOOK_PALETTE[look];
+  });
+}
+
+function LookSetting() {
+  const look = useLook();
+  return (
+    <Row label="Look" hint="Warm and friendly, or clean and plain. Just for this browser.">
+      <Seg<Look>
+        label="Look"
+        small
+        value={look}
+        options={[
+          { id: 'warm', label: 'Warm' },
+          { id: 'clean', label: 'Clean' },
+        ]}
+        onChange={chooseLook}
+      />
+    </Row>
+  );
+}
 
 function RoutingSettings() {
   const key = useApp((a) => a.key);
@@ -68,6 +96,7 @@ export function SettingsTab({ scenario }: { scenario: Scenario }) {
         />
       </Row>
       <h3>Map</h3>
+      <LookSetting />
       <Row label="Style">
         <Seg<BandStyle>
           label="Style"
