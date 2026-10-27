@@ -76,7 +76,7 @@ export function removePerson(id: Id): void {
     if (d.people.length <= 1) return;
     d.people = d.people.filter((p) => p.id !== id);
     for (const t of d.trips) t.travellers = t.travellers.filter((x) => x !== id);
-    if (d.settings.view.kind === 'person' && d.settings.view.id === id) d.settings.view = { kind: 'combined' };
+    if (d.settings.view.kind === 'person' && d.settings.view.id === id) d.settings.view = { kind: 'balanced' };
   });
 }
 

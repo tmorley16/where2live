@@ -24,6 +24,9 @@ test('the demo draws a surface and responds to edits straight away', async ({ pa
   await expect.poll(() => best(page)).toBeLessThan(fewer);
 
   // Views and styles switch without errors.
+  expect((await scenario(page))?.settings.view.kind).toBe('balanced');
+  await page.getByRole('button', { name: 'Total' }).click();
+  await expect.poll(async () => (await scenario(page))?.settings.view.kind).toBe('combined');
   await page.getByRole('button', { name: 'Fairest' }).click();
   await expect.poll(async () => (await scenario(page))?.settings.view.kind).toBe('fairest');
   await page.getByRole('button', { name: 'Cells' }).first().click();

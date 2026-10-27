@@ -5,7 +5,7 @@ import { bandFeatures } from '../../src/compute/contours';
 import { fmtDuration, fmtEdge, fmtHM } from '../../src/compute/format';
 import { rasterPixels } from '../../src/compute/raster';
 import { sampleAt } from '../../src/compute/sample';
-import { stats, viewValues, applyMask } from '../../src/compute/surface';
+import { stats, viewValues, applyMask, balancedValue, evaluateForm } from '../../src/compute/surface';
 import { specKey } from '../../src/domain/fields';
 import { buildForms } from '../../src/domain/formula';
 import { demoScenario } from '../../src/domain/presets';
@@ -67,6 +67,20 @@ describe('surface, contours and raster on the demo', () => {
     // Fairest is the busier person, so never more than the combined total.
     const fair = viewValues(forms, { kind: 'fairest' }, dense, n);
     for (let i = 0; i < n; i += 97) expect(fair[i]).toBeLessThanOrEqual(v[i] + 1e-3);
+    // Balanced is the total plus half the gap between the two people.
+    const bal = viewValues(forms, { kind: 'balanced' }, dense, n);
+    const people = [...forms.persons.values()].map((f) => evaluateForm(f, dense, n));
+    for (let i = 0; i < n; i += 97) {
+      expect(bal[i]).toBeGreaterThanOrEqual(v[i] - 1e-3);
+      expect(bal[i]).toBeCloseTo(v[i] + 0.5 * Math.abs(people[0][i] - people[1][i]), 2);
+    }
+  });
+
+  it('balanced adds half the gap, and is the total with one person', () => {
+    expect(balancedValue(300, [100, 200])).toBe(350);
+    expect(balancedValue(300, [150, 150])).toBe(300);
+    expect(balancedValue(120, [120])).toBe(120);
+    expect(balancedValue(600, [100, 200, 300])).toBe(600 + 0.5 * (900 - 600));
   });
 
   it('draws masked points unshaded and nests bands best-innermost', () => {
@@ -107,5 +121,6 @@ describe('surface, contours and raster on the demo', () => {
     expect(smp.value).toBeCloseTo(bd.combined, 2);
     expect([...bd.persons.values()].reduce((a, c) => a + c, 0)).toBeCloseTo(bd.combined, 2);
     expect(bd.fairest).toBe(Math.max(...bd.persons.values()));
+    expect(bd.balanced).toBeCloseTo(sampleAt(viewValues(forms, { kind: 'balanced' }, dense, n), w, p)!.value, 1);
   });
 });

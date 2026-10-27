@@ -12,20 +12,44 @@ export function evaluateForm(form: LinearForm, dense: Map<string, Float32Array>,
   return out;
 }
 
-/** The values the map shows for a view: the household total, one person, or the busier person (fairest). */
+/** How much of the gap between people the balanced view adds to the total. */
+export const BALANCE = 0.5;
+
+/** Balanced: the total plus half of what everyone else would need to match the busiest (for two people, half the gap). */
+export function balancedValue(total: number, persons: Iterable<number>): number {
+  let max = -Infinity;
+  let sum = 0;
+  let count = 0;
+  for (const v of persons) {
+    max = Math.max(max, v);
+    sum += v;
+    count++;
+  }
+  return count < 2 ? total : total + BALANCE * (count * max - sum);
+}
+
+/** The values the map shows for a view: the household total, balanced, one person, or the busier person (fairest). */
 export function viewValues(forms: Forms, view: View, dense: Map<string, Float32Array>, n: number): Float32Array {
   if (view.kind === 'person') {
     const f = forms.persons.get(view.id);
     if (f) return evaluateForm(f, dense, n);
   }
-  if (view.kind !== 'fairest') return evaluateForm(forms.combined, dense, n);
-  let out: Float32Array | null = null;
+  const people = forms.persons.size;
+  if (view.kind === 'person' || view.kind === 'combined' || (view.kind === 'balanced' && people < 2)) return evaluateForm(forms.combined, dense, n);
+  // The busier person at each point, and (for balanced) everyone's sum.
+  let max: Float32Array | null = null;
+  const sum = new Float32Array(n);
   for (const f of forms.persons.values()) {
     const v = evaluateForm(f, dense, n);
-    if (!out) out = v;
-    else for (let i = 0; i < n; i++) out[i] = Math.max(out[i], v[i]);
+    for (let i = 0; i < n; i++) sum[i] += v[i];
+    if (!max) max = v;
+    else for (let i = 0; i < n; i++) max[i] = Math.max(max[i], v[i]);
   }
-  return out ?? new Float32Array(n).fill(Number.NaN);
+  if (!max) return new Float32Array(n).fill(Number.NaN);
+  if (view.kind === 'fairest') return max;
+  const out = evaluateForm(forms.combined, dense, n);
+  for (let i = 0; i < n; i++) out[i] += BALANCE * (people * max[i] - sum[i]);
+  return out;
 }
 
 export interface Stats {
