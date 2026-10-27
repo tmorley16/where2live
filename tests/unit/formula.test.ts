@@ -42,8 +42,8 @@ function example(): { s: Scenario; minutes: Map<string, number> } {
   const minutes = new Map<string, number>();
   for (const [id, mode, there, back] of legs) {
     const loc = places.find((p) => p.id === id)!.location!;
-    minutes.set(specKey(legSpec(mode, 'out', loc, s.settings)), there);
-    minutes.set(specKey(legSpec(mode, 'back', loc, s.settings)), back);
+    minutes.set(specKey(legSpec(mode, 'out', [loc], s.settings)), there);
+    minutes.set(specKey(legSpec(mode, 'back', [loc], s.settings)), back);
   }
   return { s, minutes };
 }

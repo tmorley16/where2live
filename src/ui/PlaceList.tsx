@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { legSpec, specKey } from '../domain/fields';
+import { placeTargets } from '../domain/formula';
 import { CATEGORIES, CATEGORY_ORDER, MODES } from '../domain/modes';
 import type { LonLat, Place, PlaceCategory, Scenario } from '../domain/types';
 import { uiStore } from '../state/uiStore';
-import { addPlace, addTrip, removePlace, updatePlace } from './actions';
+import { addPlace, addTrip, removePlace, toggleAnyOf, updatePlace } from './actions';
+import { AnyBranch } from './AnyBranch';
 import { useApp, useResult, useUI } from './hooks';
 import { PlaceSearch } from './PlaceSearch';
 import { TripRow } from './TripRow';
@@ -18,28 +20,44 @@ function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenari
   const searching = !place.location || changing;
   const far = useResult((r) => r.area?.far.includes(place.id) ?? false);
   const failures = useApp((a) => a.job.failures);
-  const problem = place.location
+  const problem = placeTargets(place)
     ? trips
-        .flatMap((t) => (['out', 'back'] as const).map((leg) => ({ mode: t.mode, reason: failures?.[specKey(legSpec(t.mode, leg, place.location!, scenario.settings))] })))
+        .flatMap((t) => (['out', 'back'] as const).map((leg) => ({ mode: t.mode, reason: failures?.[specKey(legSpec(t.mode, leg, placeTargets(place)!, scenario.settings))] })))
         .find((x) => x.reason)
     : undefined;
 
   return (
     <section className="place" aria-label={place.name}>
       <div className="place-head">
-        <select className="cat" value={place.category} aria-label="Kind of place" title={CATEGORIES[place.category].label} onChange={(e) => updatePlace(place.id, { category: e.target.value as PlaceCategory })}>
-          {CATEGORY_ORDER.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORIES[c].glyph} {CATEGORIES[c].label}
-            </option>
-          ))}
-        </select>
+        <span className="cat" title={`${CATEGORIES[place.category].label} (change)`}>
+          <span className="cat-dot" aria-hidden="true">
+            {CATEGORIES[place.category].glyph}
+          </span>
+          <select value={place.category} aria-label="Kind of place" onChange={(e) => updatePlace(place.id, { category: e.target.value as PlaceCategory })}>
+            {CATEGORY_ORDER.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORIES[c].label}
+              </option>
+            ))}
+          </select>
+        </span>
         <input className="place-name" value={place.name} aria-label="Place name" onChange={(e) => updatePlace(place.id, { name: e.target.value })} />
+        <button
+          type="button"
+          className={`chip-toggle any-toggle${place.anyOf ? ' on' : ''}`}
+          aria-pressed={!!place.anyOf}
+          title="Any branch will do (any Woolworths, Coles or Aldi; any gym of your chain): each home counts its quickest one"
+          onClick={() => toggleAnyOf(place)}
+        >
+          Any branch
+        </button>
         <button type="button" className="icon-btn" aria-label={`Remove ${place.name}`} title="Remove this place" onClick={() => removePlace(place.id)}>
           ×
         </button>
       </div>
-      {searching ? (
+      {place.anyOf ? (
+        <AnyBranch place={place} scenario={scenario} />
+      ) : searching ? (
         <div className="place-where">
           <PlaceSearch
             near={near as LonLat}
@@ -77,9 +95,11 @@ function PlaceCard({ place, scenario, fresh }: { place: Place; scenario: Scenari
       {trips.map((t) => (
         <TripRow key={t.id} trip={t} people={scenario.people} scenario={scenario} />
       ))}
-      <button type="button" className="link add-trip" onClick={() => addTrip(place.id)}>
-        + Another trip here (someone else, another mode)
-      </button>
+      {trips.length === 0 && (
+        <button type="button" className="link add-trip" onClick={() => addTrip(place.id)}>
+          + Add a trip here
+        </button>
+      )}
     </section>
   );
 }

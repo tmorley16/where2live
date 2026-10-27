@@ -49,6 +49,7 @@ export function TripLines({ breakdown, scenario }: { breakdown: Breakdown; scena
                 {each}
               </span>
             </div>
+            {l.via && <div className="line-sub line-via">nearest: {l.via}</div>}
             <div className="line-sub">
               {who.join(' and ')} · {MODES[l.mode].label} · {describeFrequency(l.frequency)} · {legs}
               {l.overheadMin ? ` (+${l.overheadMin} min each way)` : ''}

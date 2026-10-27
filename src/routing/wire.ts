@@ -3,6 +3,7 @@ import { engine } from '../compute/engine';
 import { scenarioSpecs } from '../compute/homes';
 import { scenarioStore } from '../state/scenarioStore';
 import { appStore, noteQuota, remaining } from '../state/appStore';
+import { watchBranches } from './branches';
 import { ExactTimes } from './exact';
 import { OrsProvider } from './orsProvider';
 import { EstimateProvider } from './provider';
@@ -63,3 +64,4 @@ appStore.subscribe((s, p) => {
   if (s.key !== p.key) refreshShortlist();
 });
 refreshShortlist();
+watchBranches();

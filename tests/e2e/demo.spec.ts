@@ -9,6 +9,10 @@ test('the demo draws a surface and responds to edits straight away', async ({ pa
   expect(start).toBeGreaterThan(60);
   await expect(page.locator('.legend')).toBeVisible();
 
+  // The page itself never scrolls: only the panel does (no empty area below the app).
+  const { doc, win } = await page.evaluate(() => ({ doc: document.documentElement.scrollHeight, win: innerHeight }));
+  expect(doc).toBe(win);
+
   // Sam goes to work once a week instead of five times: less travel at the best spot.
   const work = page.locator('.place').first();
   await work.getByLabel('Times').fill('1');

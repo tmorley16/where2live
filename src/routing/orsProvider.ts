@@ -1,15 +1,17 @@
 import type { KV } from '../cache/kv';
 import { coordKey, type FieldSpec } from '../domain/fields';
 import { MODES } from '../domain/modes';
+import type { LonLat } from '../domain/types';
 import { FieldData, densify } from '../grid/dense';
 import { despike, fillIsolatedGaps } from '../grid/filters';
-import { LEVEL, idToLonLat, onLevel, windowKey, type GridWindow } from '../grid/lattice';
+import { LEVEL, idToLonLat, idToMercator, lonLatToElement, onLevel, windowKey, type GridWindow } from '../grid/lattice';
+import { TargetIndex } from '../grid/nearest';
 import { zOrder } from '../grid/zorder';
 import { Scheduler, type SchedulerStatus, type Task } from '../jobs/scheduler';
 import type { JobStatus } from '../state/appStore';
-import { estimateField } from './estimate';
+import { estimateField, estimateNearest } from './estimate';
 import type { OrsErrorKind, Quota } from './ors/client';
-import { oneToMany } from './ors/matrix';
+import { oneToMany, smallMatrix } from './ors/matrix';
 import { snapDistances } from './ors/snap';
 import type { DenseField, FieldProvider } from './provider';
 
@@ -23,6 +25,8 @@ const MAX_SNAPPED_M = 300;
 const CONFIRM_ABOVE = 30;
 const PLAN_DELAY_MS = 800;
 const FIELD_TTL_MS = 60 * 24 * 3600_000;
+/** sources × destinations per request (the server allows 3,500). */
+const MAX_ROUTES = 3400;
 
 interface SnapTask extends Task {
   kind: 'snap';
@@ -37,6 +41,9 @@ interface MatrixTask extends Task {
   depth: number;
   /** All-null came back for these ids: probe whether the place itself is reachable before splitting. */
   probe?: boolean;
+  /** An "any branch" field: every home to each of these branches in one many-to-many request. */
+  options?: LonLat[];
+  optionKeys?: string[];
 }
 
 type OrsTask = SnapTask | MatrixTask;
@@ -72,8 +79,19 @@ function profileOf(spec: FieldSpec): string {
   return MODES[spec.mode].orsProfile ?? MASK_PROFILE;
 }
 
+/** The cache key of one target's field. A place and a branch at the same spot share it. */
+function targetKey(profile: string, dir: 'to' | 'from', t: LonLat): string {
+  return `ors|${profile}|${dir}|${coordKey(t)}`;
+}
+
 function cacheKey(spec: FieldSpec): string {
-  return `ors|${profileOf(spec)}|${spec.dir}|${coordKey(spec.place)}`;
+  return targetKey(profileOf(spec), spec.dir, spec.targets[0]);
+}
+
+/** Every cached field a spec reads: one, or one per branch. */
+function keysOf(spec: FieldSpec): string[] {
+  const profile = profileOf(spec);
+  return spec.targets.map((t) => targetKey(profile, spec.dir, t));
 }
 
 function chunks<X>(xs: X[], size: number): X[][] {
@@ -86,6 +104,9 @@ function chunks<X>(xs: X[], size: number): X[][] {
  * Real road travel times from openrouteservice, cached in IndexedDB and fetched as the map needs them:
  * first a road check of every point (the mask), then the coarse lattice for every field (a quick first map),
  * then the remaining standard points. Answers at once from what it has, estimates filling the rest.
+ *
+ * "Any branch" fields keep one sparse field per branch (keyed like any place) and route each home only to its
+ * few nearest branches, packed into many-to-many requests of up to 3,400 routes.
  */
 export class OrsProvider implements FieldProvider {
   readonly name = 'ors';
@@ -98,6 +119,8 @@ export class OrsProvider implements FieldProvider {
   private failed = new Map<string, string>();
   /** Ids queued or in flight, per cache key (and 'snap'), so a re-plan never asks twice. */
   private pending = new Map<string, Set<number>>();
+  /** For "any branch" specs: each window point's candidate branches. */
+  private cands = new Map<string, { ids: Float64Array; list: number[][] }>();
   private needs: { window: GridWindow; ids: Float64Array; specs: Map<string, { spec: FieldSpec; weight: number }> } | null = null;
   private needSig = '';
   private declinedSig = '';
@@ -143,6 +166,7 @@ export class OrsProvider implements FieldProvider {
   }
 
   get(spec: FieldSpec, w: GridWindow, ids: Float64Array): DenseField {
+    if (spec.targets.length > 1) return this.getSet(spec, w, ids);
     const field = this.fields.get(cacheKey(spec));
     const fallback = estimateField(spec, ids);
     const mask = this.mask(w, ids);
@@ -152,6 +176,75 @@ export class OrsProvider implements FieldProvider {
       if (d.provisional === 0) despike(d.values, w.nx, w.ny);
     }
     return { values: d.values, provisional: d.provisional, estimate: !field || field.size === 0 };
+  }
+
+  /** The nearest branch at each point: the minimum over its candidate branches, once all of them are known. */
+  private getSet(spec: FieldSpec, w: GridWindow, ids: Float64Array): DenseField {
+    const keys = keysOf(spec);
+    const fields = keys.map((k) => this.fields.get(k));
+    const cands = this.candidates(spec, ids);
+    const mask = this.mask(w, ids);
+    const known = new FieldData();
+    for (let k = 0; k < ids.length; k++) {
+      if (mask?.[k]) continue;
+      let best = Infinity;
+      let complete = true;
+      for (const i of cands[k]) {
+        const v = fields[i]?.get(ids[k]);
+        if (v === undefined) {
+          complete = false;
+          break;
+        }
+        if (v < best) best = v; // NaN (no route to that branch) never wins
+      }
+      if (complete) known.values.set(ids[k], best === Infinity ? Number.NaN : best);
+    }
+    const d = densify(w, ids, known, estimateField(spec, ids), mask);
+    if (known.size > 0) {
+      fillIsolatedGaps(d.values, w.nx, w.ny, mask ?? undefined);
+      if (d.provisional === 0) despike(d.values, w.nx, w.ny);
+    }
+    return { values: d.values, provisional: d.provisional, estimate: known.size === 0 };
+  }
+
+  private candidates(spec: FieldSpec, ids: Float64Array): number[][] {
+    const key = `${spec.mode}|${spec.dir}|${spec.targets.map(coordKey).join(';')}`;
+    const hit = this.cands.get(key);
+    if (hit && hit.ids === ids) return hit.list;
+    const index = new TargetIndex(spec.targets);
+    const list = Array.from(ids, (id) => {
+      const [x, y] = idToMercator(id);
+      return index.candidates(x, y);
+    });
+    this.cands.set(key, { ids, list });
+    return list;
+  }
+
+  /** Which branch is quickest from a point: from road times at the nearest calculated point, else the estimate. */
+  nearest(spec: FieldSpec, p: LonLat): number {
+    if (spec.targets.length === 1) return 0;
+    const n = this.needs;
+    if (n) {
+      const [c, r] = lonLatToElement(n.window, p);
+      const cc = Math.round(c);
+      const rr = Math.round(r);
+      if (cc >= 0 && rr >= 0 && cc < n.window.nx && rr < n.window.ny) {
+        const id = n.ids[rr * n.window.nx + cc];
+        const keys = keysOf(spec);
+        let best = -1;
+        let bestMin = Infinity;
+        for (const i of new TargetIndex(spec.targets).candidatesAt(p)) {
+          const v = this.fields.get(keys[i])?.get(id);
+          if (v === undefined) return estimateNearest(spec, p);
+          if (v < bestMin) {
+            bestMin = v;
+            best = i;
+          }
+        }
+        if (best >= 0) return best;
+      }
+    }
+    return estimateNearest(spec, p);
   }
 
   mask(_w: GridWindow, ids: Float64Array): Uint8Array | null {
@@ -242,8 +335,15 @@ export class OrsProvider implements FieldProvider {
   }
 
   private release(t: OrsTask) {
-    const set = this.pending.get(t.kind === 'snap' ? 'snap' : cacheKey(t.spec));
-    if (set) for (const id of t.ids) set.delete(id);
+    const keys = t.kind === 'snap' ? ['snap'] : (t.optionKeys ?? [cacheKey(t.spec)]);
+    for (const k of keys) {
+      const set = this.pending.get(k);
+      if (set) for (const id of t.ids) set.delete(id);
+    }
+  }
+
+  private taskId(t: MatrixTask, ids: number[], depth: number): string {
+    return t.options ? `mm|${t.specKey}|${ids[0]}|${ids.length}|${depth}` : `m|${cacheKey(t.spec)}|${ids[0]}|${ids.length}|${depth}`;
   }
 
   /** Works out what's missing and queues it. Idempotent: anything cached or already queued is skipped. */
@@ -254,10 +354,12 @@ export class OrsProvider implements FieldProvider {
     await Promise.all([...specs.values()].map(({ spec }) => this.loadField(spec)));
     if (this.disposed || this.needs.ids !== ids) return;
 
-    // Drop queued work this view no longer needs (a moved place, a changed area).
-    const wanted = new Set([...specs.values()].map(({ spec }) => cacheKey(spec)));
+    // Drop queued work this view no longer needs (a moved place, a changed set of branches, a changed area).
+    const wanted = new Set([...specs.values()].filter(({ spec }) => spec.targets.length === 1).map(({ spec }) => cacheKey(spec)));
     const inWindow = new Set(ids);
-    for (const t of this.scheduler.drop((t) => (t.kind === 'matrix' && !wanted.has(cacheKey(t.spec))) || !t.ids.some((id) => inWindow.has(id)))) this.release(t);
+    const stale = (t: OrsTask) =>
+      (t.kind === 'matrix' && (t.options ? !specs.has(t.specKey) : !wanted.has(cacheKey(t.spec)))) || !t.ids.some((id) => inWindow.has(id));
+    for (const t of this.scheduler.drop(stale)) this.release(t);
     if (this.declinedSig === this.needSig) return this.report();
 
     const tasks: OrsTask[] = [];
@@ -270,17 +372,21 @@ export class OrsProvider implements FieldProvider {
     }
     // 2. Matrix requests for checked, road-side points: coarse lattice first, then the rest.
     const max = Math.max(1, this.o.maxChunk?.() ?? 3400);
+    const levels: [(id: number) => boolean, number][] = [[(id) => onLevel(id, LEVEL.coarse), 2e6]];
+    if (window.level < LEVEL.coarse) levels.push([(id) => !onLevel(id, LEVEL.coarse), 1e6]);
     for (const [specKey, { spec, weight }] of specs) {
       if (this.failed.has(specKey)) continue;
+      const bad = this.bad.get(profileOf(spec));
+      const usable = (id: number) => this.snaps.get(id) === 0 && !bad?.has(id);
+      if (spec.targets.length > 1) {
+        this.planSet(spec, specKey, weight, ids, usable, levels, max, tasks);
+        continue;
+      }
       const ck = cacheKey(spec);
       const f = this.fields.get(ck);
-      const bad = this.bad.get(profileOf(spec));
       const pend = this.pend(ck);
-      const missing = (pred: (id: number) => boolean) =>
-        zOrder(Array.from(ids).filter((id) => this.snaps.get(id) === 0 && !f?.has(id) && !bad?.has(id) && !pend.has(id) && pred(id)));
-      const coarse = missing((id) => onLevel(id, LEVEL.coarse));
-      const rest = window.level < LEVEL.coarse ? missing((id) => !onLevel(id, LEVEL.coarse)) : [];
-      for (const [list, base] of [[coarse, 2e6], [rest, 1e6]] as const) {
+      for (const [onIt, base] of levels) {
+        const list = zOrder(Array.from(ids).filter((id) => usable(id) && !f?.has(id) && !pend.has(id) && onIt(id)));
         for (const c of chunks(list, max)) {
           tasks.push({ id: `m|${ck}|${c[0]}|${c.length}|0`, kind: 'matrix', priority: base + weight, spec, specKey, ids: c, depth: 0 });
           for (const id of c) pend.add(id);
@@ -298,6 +404,62 @@ export class OrsProvider implements FieldProvider {
     }
     this.scheduler.add(tasks);
     this.report();
+  }
+
+  /**
+   * "Any branch": each point needs its candidate branches. Points are taken in Z-order (neighbours share branches)
+   * and packed into tiles while points × branches stays within the route limit.
+   */
+  private planSet(
+    spec: FieldSpec,
+    specKey: string,
+    weight: number,
+    ids: Float64Array,
+    usable: (id: number) => boolean,
+    levels: [(id: number) => boolean, number][],
+    max: number,
+    tasks: OrsTask[],
+  ) {
+    const keys = keysOf(spec);
+    const fields = keys.map((k) => this.fields.get(k));
+    const pends = keys.map((k) => this.pend(k));
+    const cands = this.candidates(spec, ids);
+    const byId = new Map<number, number>();
+    ids.forEach((id, k) => byId.set(id, k));
+    for (const [onIt, base] of levels) {
+      const order = zOrder(Array.from(ids).filter((id) => usable(id) && onIt(id)));
+      let pts: number[] = [];
+      let opts = new Set<number>();
+      const emit = () => {
+        if (!pts.length) return;
+        const list = [...opts];
+        tasks.push({
+          id: `mm|${specKey}|${pts[0]}|${pts.length}|0`,
+          kind: 'matrix',
+          priority: base + weight,
+          spec,
+          specKey,
+          ids: pts,
+          depth: 0,
+          options: list.map((i) => spec.targets[i]),
+          optionKeys: list.map((i) => keys[i]),
+        });
+        for (const i of list) for (const id of pts) pends[i].add(id);
+        pts = [];
+        opts = new Set();
+      };
+      for (const id of order) {
+        const miss = cands[byId.get(id)!].filter((i) => !fields[i]?.has(id) && !pends[i].has(id));
+        if (miss.length === 0) continue;
+        const merged = new Set([...opts, ...miss]);
+        if (pts.length && ((pts.length + 1) * merged.size > MAX_ROUTES || pts.length + 1 > max)) {
+          emit();
+          for (const i of miss) opts.add(i);
+        } else opts = merged;
+        pts.push(id);
+      }
+      emit();
+    }
   }
 
   // ---------- Running ----------
@@ -318,18 +480,20 @@ export class OrsProvider implements FieldProvider {
     const key = this.o.key();
     if (!key) throw Object.assign(new Error('No key'), { kind: 'auth' });
     const profile = profileOf(t.spec);
+    if (t.options) return this.runMany(t, profile, key, signal);
     const ck = cacheKey(t.spec);
+    const place = t.spec.targets[0];
 
     if (t.probe) {
       // Is the place reachable at all? Route it to a point we know works.
       const probe = this.probePoint(profile, t.ids);
-      const r = await oneToMany(profile, t.spec.place, [idToLonLat(probe)], t.spec.dir, key, signal, this.o.fetchImpl);
+      const r = await oneToMany(profile, place, [idToLonLat(probe)], t.spec.dir, key, signal, this.o.fetchImpl);
       this.o.onQuota?.('matrix', r.quota);
       if (r.placeUnroutable || !Number.isFinite(r.minutes[0])) return this.failPlace(t, 'unreachable');
       return this.quarters(t);
     }
 
-    const r = await oneToMany(profile, t.spec.place, t.ids.map(idToLonLat), t.spec.dir, key, signal, this.o.fetchImpl);
+    const r = await oneToMany(profile, place, t.ids.map(idToLonLat), t.spec.dir, key, signal, this.o.fetchImpl);
     this.o.onQuota?.('matrix', r.quota);
     if (r.placeUnroutable) return this.failPlace(t, 'no-road');
     let finite = 0;
@@ -354,12 +518,37 @@ export class OrsProvider implements FieldProvider {
     this.release(t);
     this.saveField(ck);
     if (maskChanged) this.saveSnaps();
-    this.notify(maskChanged ? [t.specKey, '*mask'] : [t.specKey]);
+    this.notify([...this.specKeysReading(new Set([ck])), ...(maskChanged ? ['*mask'] : [])]);
+  }
+
+  /** Homes × branches in one request; every answer is kept (each branch's field gains these homes). */
+  private async runMany(t: MatrixTask, profile: string, key: string, signal: AbortSignal): Promise<MatrixTask[] | void> {
+    const { minutes, quota } = await smallMatrix(profile, t.ids.map(idToLonLat), t.options!, key, signal, this.o.fetchImpl);
+    this.o.onQuota?.('matrix', quota);
+    let finite = 0;
+    for (const row of minutes) for (const v of row) if (Number.isFinite(v)) finite++;
+    if (finite === 0) {
+      if (t.ids.length === 1) {
+        this.markBad(profile, t.ids);
+        this.release(t);
+        return;
+      }
+      return this.quarters(t);
+    }
+    t.optionKeys!.forEach((ck, o) => {
+      this.field(ck).merge(
+        t.ids,
+        t.ids.map((_, p) => minutes[p]?.[o] ?? Number.NaN),
+      );
+      this.saveField(ck);
+    });
+    this.release(t);
+    this.notify(this.specKeysReading(new Set(t.optionKeys)));
   }
 
   private quarters(t: MatrixTask): MatrixTask[] {
     const size = t.ids.length <= 8 ? 1 : Math.ceil(t.ids.length / 4);
-    return chunks(t.ids, size).map((ids) => ({ ...t, id: `m|${cacheKey(t.spec)}|${ids[0]}|${ids.length}|${t.depth + 1}`, ids, depth: t.depth + 1, probe: false }));
+    return chunks(t.ids, size).map((ids) => ({ ...t, id: this.taskId(t, ids, t.depth + 1), ids, depth: t.depth + 1, probe: false }));
   }
 
   private split(t: OrsTask, kind: OrsErrorKind): OrsTask[] | null {
@@ -367,9 +556,7 @@ export class OrsProvider implements FieldProvider {
     if (t.kind === 'matrix' && kind !== 'too-big' && t.depth >= 3) return null;
     if (kind === 'too-big') this.o.onMaxChunk?.(Math.floor(t.ids.length / 2));
     const half = Math.ceil(t.ids.length / 2);
-    return chunks(t.ids, half).map((ids, i) =>
-      t.kind === 'snap' ? { ...t, id: `${t.id}|${i}`, ids } : { ...t, id: `m|${cacheKey(t.spec)}|${ids[0]}|${ids.length}|${t.depth + 1}`, ids, depth: t.depth + 1 },
-    );
+    return chunks(t.ids, half).map((ids, i) => (t.kind === 'snap' ? { ...t, id: `${t.id}|${i}`, ids } : { ...t, id: this.taskId(t, ids, t.depth + 1), ids, depth: t.depth + 1 }));
   }
 
   /** Given up after retries: leave the points missing (they'll be tried again on Retry). */
@@ -417,7 +604,10 @@ export class OrsProvider implements FieldProvider {
   }
 
   private loadField(spec: FieldSpec): Promise<void> {
-    const ck = cacheKey(spec);
+    return Promise.all(keysOf(spec).map((ck) => this.loadKey(ck))).then(() => {});
+  }
+
+  private loadKey(ck: string): Promise<void> {
     let p = this.loads.get(ck);
     if (!p) {
       p = this.o.kv.fields
@@ -431,7 +621,8 @@ export class OrsProvider implements FieldProvider {
             f.merge(a.ids, a.minutes, a.km);
           }
           this.fields.set(ck, f);
-          this.notifyKeyFor(ck);
+          const keys = this.specKeysReading(new Set([ck]));
+          if (keys.length) this.notify(keys);
         })
         .catch(() => {});
       this.loads.set(ck, p);
@@ -439,9 +630,9 @@ export class OrsProvider implements FieldProvider {
     return p;
   }
 
-  private notifyKeyFor(ck: string) {
-    const keys = [...(this.needs?.specs.entries() ?? [])].filter(([, v]) => cacheKey(v.spec) === ck).map(([k]) => k);
-    if (keys.length) this.notify(keys);
+  /** The needed spec keys that read any of these cached fields. */
+  private specKeysReading(cks: Set<string>): string[] {
+    return [...(this.needs?.specs.entries() ?? [])].filter(([, v]) => keysOf(v.spec).some((k) => cks.has(k))).map(([k]) => k);
   }
 
   private saveField(ck: string) {

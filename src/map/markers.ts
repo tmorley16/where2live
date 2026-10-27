@@ -55,7 +55,7 @@ export class PlaceMarkers {
   sync(places: Place[], far: Set<Id>): void {
     const keep = new Set<Id>();
     for (const p of places) {
-      if (!p.location) continue;
+      if (!p.location || p.anyOf) continue; // an "any branch" place shows as its branches' dots instead
       keep.add(p.id);
       const key = `${p.name}|${p.category}|${far.has(p.id)}`;
       const cur = this.markers.get(p.id);

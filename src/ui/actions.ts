@@ -114,7 +114,24 @@ export function updatePlace(id: Id, patch: Partial<Place>): void {
   if (firstPlaced) requestFit(); // the first place sets where the map looks
 }
 
-/** Changing a place's category resets its trips' defaults only if they were untouched; here we just relabel. */
+/**
+ * Switches a place between one location and "any branch". The current pin becomes the first branch (your usual
+ * gym stays in the list); switching back pins the first branch.
+ */
+export function toggleAnyOf(place: Place): void {
+  edit((d) => {
+    const p = d.places.find((x) => x.id === place.id);
+    if (!p) return;
+    if (p.anyOf) {
+      if (!p.location && p.anyOf.options.length) p.location = p.anyOf.options[0].location;
+      delete p.anyOf;
+    } else {
+      const name = p.address?.split(',').slice(0, 2).join(',') || p.name;
+      p.anyOf = { chains: [], options: p.location ? [{ id: newId(), name, location: p.location }] : [] };
+    }
+  });
+}
+
 export function removePlace(id: Id): void {
   edit((d) => {
     d.places = d.places.filter((p) => p.id !== id);

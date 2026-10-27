@@ -1,6 +1,7 @@
 import type { FieldSpec } from '../domain/fields';
+import type { LonLat } from '../domain/types';
 import type { GridWindow } from '../grid/lattice';
-import { estimateField } from './estimate';
+import { estimateField, estimateNearest } from './estimate';
 
 /** A field laid out over the current window, in minutes. */
 export interface DenseField {
@@ -26,6 +27,8 @@ export interface FieldProvider {
   mask?(window: GridWindow, ids: Float64Array): Uint8Array | null;
   /** Places the router can't reach, by spec key, with a reason. */
   failures?(): Map<string, string>;
+  /** For an "any branch" field: the index of the target quickest from a point. */
+  nearest?(spec: FieldSpec, p: LonLat): number;
   dispose?(): void;
 }
 
@@ -33,6 +36,9 @@ export class EstimateProvider implements FieldProvider {
   readonly name = 'estimate';
   get(spec: FieldSpec, _w: GridWindow, ids: Float64Array): DenseField {
     return { values: estimateField(spec, ids), provisional: 0, estimate: true };
+  }
+  nearest(spec: FieldSpec, p: LonLat): number {
+    return estimateNearest(spec, p);
   }
   subscribe(): () => void {
     return () => {};

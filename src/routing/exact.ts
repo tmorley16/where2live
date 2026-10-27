@@ -3,6 +3,7 @@ import { openKV, type KV } from '../cache/kv';
 import { coordKey, type FieldSpec } from '../domain/fields';
 import { MODES } from '../domain/modes';
 import type { LonLat } from '../domain/types';
+import { TargetIndex } from '../grid/nearest';
 import { estimateMinutes } from './estimate';
 import { smallMatrix } from './ors/matrix';
 import type { OrsProvider } from './orsProvider';
@@ -11,6 +12,12 @@ import type { OrsProvider } from './orsProvider';
 export const exactStore = createStore<{ version: number; busy: number; error: string | null }>(() => ({ version: 0, busy: 0, error: null }));
 
 const MAX_ROUTES = 3000;
+
+/** The targets a home is routed to: the place, or its nearest few branches. */
+function homeTargets(home: LonLat, spec: FieldSpec): LonLat[] {
+  if (spec.targets.length === 1) return spec.targets;
+  return new TargetIndex(spec.targets).candidatesAt(home).map((i) => spec.targets[i]);
+}
 
 /**
  * Exact travel times between specific homes (a shortlisted listing, a clicked spot) and the places:
@@ -29,20 +36,25 @@ export class ExactTimes {
     this.kv = kv ?? openKV('pairs');
   }
 
-  private key(provider: string, spec: FieldSpec, home: LonLat): string {
-    const profile = MODES[spec.mode].orsProfile ?? spec.mode;
-    return `${provider}|${profile}|${spec.dir}|${coordKey(home)}|${coordKey(spec.place)}`;
+  private pairKey(spec: FieldSpec, home: LonLat, target: LonLat): string {
+    return `ors|${MODES[spec.mode].orsProfile ?? spec.mode}|${spec.dir}|${coordKey(home)}|${coordKey(target)}`;
   }
 
   private provider(): 'ors' | 'estimate' {
     return this.ors()?.keyValue ? 'ors' : 'estimate';
   }
 
-  /** Minutes for one home and one field, if known. Estimates are always known. */
+  /** Minutes from one home to the nearest of a field's targets, if known. Estimates are always known. */
   get(home: LonLat, spec: FieldSpec): number | undefined {
-    const p = this.provider();
-    if (p === 'estimate') return estimateMinutes(spec.mode, home, spec.place);
-    return this.mem.get(this.key('ors', spec, home));
+    const targets = homeTargets(home, spec);
+    if (this.provider() === 'estimate') return Math.min(...targets.map((t) => estimateMinutes(spec.mode, home, t)));
+    let best = Infinity;
+    for (const t of targets) {
+      const v = this.mem.get(this.pairKey(spec, home, t));
+      if (v === undefined) return undefined;
+      if (v < best) best = v;
+    }
+    return best === Infinity ? Number.NaN : best;
   }
 
   isExact(): boolean {
@@ -54,15 +66,17 @@ export class ExactTimes {
     const ors = this.ors();
     if (!ors?.keyValue || homes.length === 0 || specs.length === 0) return;
     // Look in IndexedDB first.
-    const missing: { home: LonLat; spec: FieldSpec; k: string }[] = [];
+    const missing: { home: LonLat; spec: FieldSpec; target: LonLat }[] = [];
     for (const home of homes) {
       for (const spec of specs) {
         if (!MODES[spec.mode].orsProfile) continue;
-        const k = this.key('ors', spec, home);
-        if (this.mem.has(k)) continue;
-        const v = await this.kv.get<number>(k).catch(() => undefined);
-        if (v !== undefined) this.mem.set(k, v);
-        else missing.push({ home, spec, k });
+        for (const target of homeTargets(home, spec)) {
+          const k = this.pairKey(spec, home, target);
+          if (this.mem.has(k)) continue;
+          const v = await this.kv.get<number>(k).catch(() => undefined);
+          if (v !== undefined) this.mem.set(k, v);
+          else missing.push({ home, spec, target });
+        }
       }
     }
     if (missing.length === 0) return exactStore.setState((s) => ({ version: s.version + 1 }));
@@ -70,10 +84,11 @@ export class ExactTimes {
     const groups = new Map<string, { profile: string; dir: 'to' | 'from'; homes: Map<string, LonLat>; places: Map<string, LonLat> }>();
     for (const m of missing) {
       const profile = MODES[m.spec.mode].orsProfile!;
-      const g = groups.get(`${profile}|${m.spec.dir}`) ?? { profile, dir: m.spec.dir, homes: new Map(), places: new Map() };
+      const gk = `${profile}|${m.spec.dir}`;
+      const g = groups.get(gk) ?? { profile, dir: m.spec.dir, homes: new Map(), places: new Map() };
       g.homes.set(coordKey(m.home), m.home);
-      g.places.set(coordKey(m.spec.place), m.spec.place);
-      groups.set(`${profile}|${m.spec.dir}`, g);
+      g.places.set(coordKey(m.target), m.target);
+      groups.set(gk, g);
     }
     exactStore.setState((s) => ({ busy: s.busy + 1, error: null }));
     try {

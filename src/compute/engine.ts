@@ -5,6 +5,7 @@ import type { LonLat } from '../domain/types';
 import { areaFor, type Area } from '../grid/area';
 import { elementMercator, windowFor, windowIds, windowKey, type GridWindow } from '../grid/lattice';
 import { fromMercator } from '../grid/mercator';
+import { estimateNearest } from '../routing/estimate';
 import { EstimateProvider, type FieldProvider } from '../routing/provider';
 import { scenarioStore } from '../state/scenarioStore';
 import { uiStore } from '../state/uiStore';
@@ -206,18 +207,27 @@ export class Engine {
     });
   }
 
+  /** For an "any branch" field: the target quickest from a point. */
+  nearestOf(spec: FieldSpec, p: LonLat): number {
+    return this.provider.nearest?.(spec, p) ?? estimateNearest(spec, p);
+  }
+
   /** Trip-by-trip minutes at a point, from the current fields. */
   breakdownAt(p: LonLat): Breakdown | null {
     const s = scenarioStore.getState().scenario;
     const w = this.window;
     if (!s || !w) return null;
     let ok = true;
-    const bd = breakdownAt(s, (spec) => {
-      const d = this.dense.get(specKey(spec));
-      const smp = d ? sampleAt(d, w, p) : null;
-      if (!smp) ok = false;
-      return smp ? smp.value : Number.NaN;
-    });
+    const bd = breakdownAt(
+      s,
+      (spec) => {
+        const d = this.dense.get(specKey(spec));
+        const smp = d ? sampleAt(d, w, p) : null;
+        if (!smp) ok = false;
+        return smp ? smp.value : Number.NaN;
+      },
+      (spec) => this.provider.nearest?.(spec, p) ?? estimateNearest(spec, p),
+    );
     return ok ? bd : null;
   }
 }

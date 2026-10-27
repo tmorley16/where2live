@@ -3,7 +3,7 @@ import type { GeoJSONSource, ImageSource, Map as MlMap } from 'maplibre-gl';
 import { bandFeatures } from '../compute/contours';
 import type { Frame } from '../compute/engine';
 import { rasterPixels } from '../compute/raster';
-import type { Settings } from '../domain/types';
+import type { Place, Settings } from '../domain/types';
 import { areaBBox, type Area } from '../grid/area';
 import { windowCorners } from '../grid/lattice';
 import { BANDS_BEFORE, WASHOUT_LAYERS } from './style';
@@ -57,6 +57,14 @@ export class SurfaceLayers {
     );
     map.addSource('w2l-area', { type: 'geojson', data: EMPTY });
     map.addLayer({ id: 'w2l-area', type: 'line', source: 'w2l-area', paint: { 'line-color': '#5b6670', 'line-width': 1, 'line-dasharray': [3, 3], 'line-opacity': 0.7 } });
+    // The branches of "any branch" places: small dots (a supermarket chain can have a hundred).
+    map.addSource('w2l-branches', { type: 'geojson', data: EMPTY });
+    map.addLayer({
+      id: 'w2l-branches',
+      type: 'circle',
+      source: 'w2l-branches',
+      paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 2.5, 14, 5], 'circle-color': '#1d2125', 'circle-opacity': 0.65 },
+    });
     for (const id of WASHOUT_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   }
 
@@ -93,6 +101,18 @@ export class SurfaceLayers {
     this.map.setPaintProperty('w2l-bands', 'fill-layer-opacity', display.opacity);
     this.map.setPaintProperty('w2l-cells', 'raster-opacity', display.opacity);
     this.map.setPaintProperty('w2l-cells', 'raster-resampling', display.style === 'cells' ? 'nearest' : 'linear');
+  }
+
+  private branchesKey = '';
+
+  showBranches(places: Place[]): void {
+    const features = places.flatMap((p) =>
+      (p.anyOf?.options ?? []).map((o) => ({ type: 'Feature' as const, properties: { name: o.name, place: p.name }, geometry: { type: 'Point' as const, coordinates: o.location } })),
+    );
+    const key = features.map((f) => f.geometry.coordinates.join(',')).join(';');
+    if (key === this.branchesKey) return;
+    this.branchesKey = key;
+    void (this.map.getSource('w2l-branches') as GeoJSONSource).setData({ type: 'FeatureCollection', features });
   }
 
   showArea(area: Area | null): void {

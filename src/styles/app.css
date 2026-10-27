@@ -11,6 +11,12 @@ body,
   margin: 0;
 }
 
+/* A full-window app: only the panel scrolls, never the page. */
+html,
+body {
+  overflow: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -49,7 +55,10 @@ h3 {
   height: 100%;
 }
 
+/* position: relative so absolutely positioned bits inside (screen-reader text) stay inside the scrolling panel;
+   without it they were placed against the page and stretched it to the panel's full length. */
 .panel {
+  position: relative;
   background: var(--surface);
   border-right: 1px solid var(--line);
   overflow: auto;
@@ -83,6 +92,7 @@ h3 {
   position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* Two classes, so MapLibre's later-loaded `.maplibregl-map { position: relative }` can't collapse it. */
@@ -478,13 +488,13 @@ input[type='range'] {
 .places {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .place {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px 10px 6px;
+  padding: 6px 8px 4px;
 }
 
 .place-head {
@@ -493,10 +503,56 @@ input[type='range'] {
   gap: 6px;
 }
 
+/* Small selects for the dense trip rows. Fixed widths: a closed select shows only its chosen value,
+   so it needn't be as wide as its longest option. */
+select.compact {
+  padding: 2px 4px;
+  font-size: var(--size-sm);
+}
+
+select.compact.mode {
+  width: 70px;
+}
+
+select.compact.band {
+  width: 110px;
+}
+
+select.compact.per {
+  width: 104px;
+}
+
+/* The kind of place: a dot like the map's pins, with an invisible select over it. */
 .cat {
-  width: 44px;
-  padding: 4px;
+  position: relative;
+  width: 24px;
+  height: 24px;
   flex: none;
+}
+
+.cat-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1d2125;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cat select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.cat:focus-within .cat-dot {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .place-name {
@@ -515,7 +571,8 @@ input[type='range'] {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 4px 0 6px;
+  margin: 0 0 4px;
+  min-height: 22px;
 }
 
 .place-where .search {
@@ -539,10 +596,10 @@ input[type='range'] {
 
 .trip {
   border-top: 1px solid var(--line);
-  padding: 7px 0 4px;
+  padding: 5px 0 3px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .trip-off {
@@ -552,7 +609,7 @@ input[type='range'] {
 .trip-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -560,8 +617,10 @@ input[type='range'] {
   margin-left: auto;
 }
 
-.trip-line .link {
-  margin-left: auto;
+.trip-line .num {
+  width: 50px;
+  padding: 2px 5px;
+  font-size: var(--size-sm);
 }
 
 .trip-warn {
@@ -579,7 +638,7 @@ input[type='range'] {
   border: 1px solid var(--line-strong);
   background: var(--surface);
   border-radius: 999px;
-  padding: 2px 9px;
+  padding: 1px 8px;
   font-size: var(--size-sm);
   cursor: pointer;
   color: var(--text-2);
@@ -612,6 +671,88 @@ input[type='range'] {
   display: flex;
   gap: 14px;
   width: 100%;
+}
+
+/* "Any branch" places */
+
+.chip-toggle {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--size-sm);
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip-toggle:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.any-toggle {
+  flex: none;
+  font-size: 11.5px;
+  padding: 0 7px;
+}
+
+.anyof {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.anyof-find input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 7px;
+  font-size: var(--size-sm);
+}
+
+.anyof-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: var(--size-sm);
+  color: var(--text-2);
+}
+
+.branches {
+  list-style: none;
+  margin: 0;
+  padding: 2px 6px;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--size-sm);
+}
+
+.branches li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.line-via {
+  font-weight: 400;
+  color: var(--text-3);
 }
 
 .add-trip {

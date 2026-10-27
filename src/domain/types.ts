@@ -16,6 +16,15 @@ export interface Person {
   colour: string;
 }
 
+/** One branch of an "any branch" place. */
+export interface PlaceOption {
+  id: Id;
+  name: string;
+  location: LonLat;
+  /** The chain search it came from; absent when added by hand (kept when the search is re-run). */
+  chain?: string;
+}
+
 export interface Place {
   id: Id;
   name: string;
@@ -23,6 +32,16 @@ export interface Place {
   /** Null until the user has placed it. Trips to an unplaced place are left out of the totals. */
   location: LonLat | null;
   address?: string;
+  /**
+   * Any branch will do (any Woolworths, Coles or Aldi; any gym of a chain): each home counts the branch quickest
+   * to reach from it. When set, `location` is unused.
+   */
+  anyOf?: {
+    chains: string[];
+    options: PlaceOption[];
+    /** The area the chains were searched in, so a grown area can be searched again. */
+    searched?: BBox;
+  };
 }
 
 export interface LegTiming {

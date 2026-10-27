@@ -1,6 +1,6 @@
 import { buildForms } from '../domain/formula';
 import type { Id, LonLat, Scenario, View } from '../domain/types';
-import { estimateMinutes } from '../routing/estimate';
+import { estimateMinutes, estimateNearest } from '../routing/estimate';
 import type { ExactTimes } from '../routing/exact';
 import { breakdownAt, type Breakdown } from './breakdown';
 import type { Engine } from './engine';
@@ -28,16 +28,24 @@ export function viewValue(bd: Breakdown, view: View): number {
 export function homeResult(s: Scenario, home: LonLat, exact: ExactTimes, engine: Engine, preferExact: boolean): HomeResult | null {
   if (preferExact && exact.isExact()) {
     let complete = true;
-    const bd = breakdownAt(s, (spec) => {
-      const v = exact.get(home, spec);
-      if (v === undefined) complete = false;
-      return v ?? Number.NaN;
-    });
+    const bd = breakdownAt(
+      s,
+      (spec) => {
+        const v = exact.get(home, spec);
+        if (v === undefined) complete = false;
+        return v ?? Number.NaN;
+      },
+      (spec) => engine.nearestOf(spec, home),
+    );
     if (complete) return { breakdown: bd, value: viewValue(bd, s.settings.view), exact: true, estimate: false };
   }
   const grid = engine.breakdownAt(home);
   if (grid) return { breakdown: grid, value: viewValue(grid, s.settings.view), exact: false, estimate: engine.providerName === 'estimate' };
-  const bd = breakdownAt(s, (spec) => estimateMinutes(spec.mode, home, spec.place));
+  const bd = breakdownAt(
+    s,
+    (spec) => Math.min(...spec.targets.map((t) => estimateMinutes(spec.mode, home, t))),
+    (spec) => estimateNearest(spec, home),
+  );
   return { breakdown: bd, value: viewValue(bd, s.settings.view), exact: false, estimate: true };
 }
 

@@ -70,7 +70,7 @@ async function settle(statuses: JobStatus[]) {
 const [cx, cy] = toMercator([151.15, -33.84]);
 const window = windowFor([cx - 4000, cy - 4000, cx + 4000, cy + 4000], LEVEL.standard);
 const ids = windowIds(window);
-const work: FieldSpec = { mode: 'car', dir: 'to', place: [151.2057, -33.8657] };
+const work: FieldSpec = { mode: 'car', dir: 'to', targets: [[151.2057, -33.8657]] };
 const needs = (...specs: FieldSpec[]) => new Map(specs.map((s) => [specKey(s), { spec: s, weight: 1 }]));
 
 describe('OrsProvider', () => {
@@ -93,7 +93,7 @@ describe('OrsProvider', () => {
     expect(after.estimate).toBe(false);
     expect(after.provisional).toBe(0);
     const k = ids.indexOf(landIds[0]);
-    expect(after.values[k]).toBeCloseTo(haversine(idToLonLat(landIds[0]), work.place) / 600, 1);
+    expect(after.values[k]).toBeCloseTo(haversine(idToLonLat(landIds[0]), work.targets[0]) / 600, 1);
     expect(statuses.at(-1)?.state).toBe('idle');
   });
 
@@ -109,7 +109,7 @@ describe('OrsProvider', () => {
     await settle(again.statuses);
     expect(fake.calls.length).toBe(n);
     // Move the place: matrix requests for the new spot only, no new road checks.
-    const moved: FieldSpec = { ...work, place: [151.21, -33.87] };
+    const moved: FieldSpec = { ...work, targets: [[151.21, -33.87]] };
     again.p.need(window, ids, needs(moved));
     await settle(again.statuses);
     const extra = fake.calls.slice(n);
@@ -148,7 +148,7 @@ describe('OrsProvider', () => {
   it('reports a place it can’t reach', async () => {
     const fake = fakeOrs({ water: ([lon, lat]) => Math.abs(lon - 151.3) < 0.01 && Math.abs(lat + 33.8) < 0.01 });
     const { p, statuses } = setup(fake);
-    const wet: FieldSpec = { mode: 'car', dir: 'to', place: [151.3, -33.8] };
+    const wet: FieldSpec = { mode: 'car', dir: 'to', targets: [[151.3, -33.8]] };
     p.need(window, ids, needs(wet));
     await settle(statuses);
     expect(statuses.at(-1)?.failures?.[specKey(wet)]).toBe('no-road');

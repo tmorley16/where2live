@@ -86,7 +86,13 @@ export default function MapView() {
         }
       };
       cleanups.push(resultStore.subscribe(draw));
-      cleanups.push(scenarioStore.subscribe((st) => places.sync(st.scenario?.places ?? [], new Set(resultStore.getState().area?.far ?? []))));
+      cleanups.push(
+        scenarioStore.subscribe((st) => {
+          places.sync(st.scenario?.places ?? [], new Set(resultStore.getState().area?.far ?? []));
+          layers.showBranches(st.scenario?.places ?? []);
+        }),
+      );
+      layers.showBranches(getScenario()?.places ?? []);
       cleanups.push(
         uiStore.subscribe((st, prev) => {
           // Wait a moment so the engine has worked out the new area first (it runs on the next frame).

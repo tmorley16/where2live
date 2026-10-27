@@ -40,10 +40,17 @@ export function legMultiplier(trip: Trip, leg: LegTiming, scenario: Scenario): n
   return MODES[trip.mode].traffic ? scenario.settings.trafficMultipliers[leg.band] : 1;
 }
 
-/** The trip's destination, if it has one placed. MVP trips have exactly one place. */
-export function tripPlace(trip: Trip, places: Map<Id, Place>): (Place & { location: LonLat }) | null {
-  const p = places.get(trip.placeIds[0]);
-  return p && p.location ? (p as Place & { location: LonLat }) : null;
+/** Where a place is: its one location, or every branch of an "any branch" place. Null when not placed yet. */
+export function placeTargets(p: Place): LonLat[] | null {
+  if (p.anyOf) return p.anyOf.options.length ? p.anyOf.options.map((o) => o.location) : null;
+  return p.location ? [p.location] : null;
+}
+
+/** The trip's destination and its targets, if placed. MVP trips have exactly one place. */
+export function tripPlace(trip: Trip, places: Map<Id, Place>): { place: Place; targets: LonLat[] } | null {
+  const place = places.get(trip.placeIds[0]);
+  const targets = place ? placeTargets(place) : null;
+  return place && targets ? { place, targets } : null;
 }
 
 /** Valid travellers: people who still exist. */
@@ -67,13 +74,13 @@ export function countedPeople(trip: Trip, scenario: Scenario): number {
 /** Weekly minutes for ONE traveller on this trip, as a linear form. */
 export function tripUnitForm(trip: Trip, scenario: Scenario, places: Map<Id, Place>): LinearForm {
   const form = emptyForm();
-  const place = tripPlace(trip, places);
-  if (!place) return form;
+  const tp = tripPlace(trip, places);
+  if (!tp) return form;
   const w = tripsPerWeek(trip.frequency);
   const out = trip.legs !== 'back-only';
   const back = trip.legs !== 'there-only';
-  if (out) addTerm(form, legSpec(trip.mode, 'out', place.location, scenario.settings), w * legMultiplier(trip, trip.out, scenario));
-  if (back) addTerm(form, legSpec(trip.mode, 'back', place.location, scenario.settings), w * legMultiplier(trip, trip.back, scenario));
+  if (out) addTerm(form, legSpec(trip.mode, 'out', tp.targets, scenario.settings), w * legMultiplier(trip, trip.out, scenario));
+  if (back) addTerm(form, legSpec(trip.mode, 'back', tp.targets, scenario.settings), w * legMultiplier(trip, trip.back, scenario));
   form.constant += w * ((out ? 1 : 0) + (back ? 1 : 0)) * Math.max(0, trip.overheadMin || 0);
   return form;
 }

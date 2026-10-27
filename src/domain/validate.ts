@@ -1,6 +1,6 @@
 import { CATEGORY_ORDER, MODE_ORDER, BAND_ORDER } from './modes';
 import { defaultSettings } from './presets';
-import type { Scenario } from './types';
+import type { Place, Scenario } from './types';
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const isLonLat = (x: unknown): x is [number, number] =>
@@ -15,12 +15,22 @@ export function parseScenario(raw: unknown): Scenario | null {
   const d = defaultSettings();
   const st = isObj(raw.settings) ? raw.settings : {};
   const people = raw.people.filter(isObj).filter((p) => typeof p.id === 'string').map((p) => ({ id: String(p.id), name: String(p.name ?? 'Someone'), colour: String(p.colour ?? '#495057') }));
+  const isBBox = (x: unknown): x is [number, number, number, number] => Array.isArray(x) && x.length === 4 && x.every((v) => typeof v === 'number' && Number.isFinite(v));
+  const anyOf = (x: unknown): Place['anyOf'] => {
+    if (!isObj(x)) return undefined;
+    const options = (Array.isArray(x.options) ? x.options : [])
+      .filter(isObj)
+      .filter((o) => typeof o.id === 'string' && isLonLat(o.location))
+      .map((o) => ({ id: String(o.id), name: String(o.name ?? 'Branch'), location: o.location as [number, number], ...(typeof o.chain === 'string' ? { chain: o.chain } : {}) }));
+    return { chains: Array.isArray(x.chains) ? x.chains.filter((c): c is string => typeof c === 'string') : [], options, ...(isBBox(x.searched) ? { searched: x.searched } : {}) };
+  };
   const places = raw.places.filter(isObj).filter((p) => typeof p.id === 'string').map((p) => ({
     id: String(p.id),
     name: String(p.name ?? 'Place'),
     category: CATEGORY_ORDER.includes(p.category as never) ? (p.category as Scenario['places'][number]['category']) : 'other',
     location: isLonLat(p.location) ? (p.location as [number, number]) : null,
     ...(typeof p.address === 'string' ? { address: p.address } : {}),
+    ...(p.anyOf ? { anyOf: anyOf(p.anyOf) } : {}),
   }));
   const band = (x: unknown) => (isObj(x) && BAND_ORDER.includes(x.band as never) ? { band: x.band as Scenario['trips'][number]['out']['band'], ...(typeof x.multiplier === 'number' ? { multiplier: x.multiplier } : {}) } : { band: 'offpeak' as const });
   const trips = raw.trips.filter(isObj).filter((t) => typeof t.id === 'string' && Array.isArray(t.placeIds)).map((t) => {

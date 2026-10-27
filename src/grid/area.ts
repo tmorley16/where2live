@@ -37,15 +37,18 @@ function weightedMedian(values: number[], weights: number[]): number {
   return values[order[order.length - 1]];
 }
 
-/** Each placed place's weight: trips per week × travellers, over enabled trips. */
+/**
+ * Each placed place's weight: trips per week × travellers, over enabled trips. "Any branch" places are left out:
+ * their branches are everywhere, so they shouldn't stretch the area.
+ */
 export function placeWeights(s: Scenario): Map<Id, { location: LonLat; weight: number }> {
   const places = new Map(s.places.map((p) => [p.id, p]));
   const out = new Map<Id, { location: LonLat; weight: number }>();
-  for (const p of s.places) if (p.location) out.set(p.id, { location: p.location, weight: 0 });
+  for (const p of s.places) if (p.location && !p.anyOf) out.set(p.id, { location: p.location, weight: 0 });
   for (const t of s.trips) {
-    const p = tripPlace(t, places);
-    if (!p || !t.enabled) continue;
-    out.get(p.id)!.weight += tripsPerWeek(t.frequency) * Math.max(1, tripTravellers(t, s).length);
+    const tp = tripPlace(t, places);
+    if (!tp || tp.place.anyOf || !t.enabled) continue;
+    out.get(tp.place.id)!.weight += tripsPerWeek(t.frequency) * Math.max(1, tripTravellers(t, s).length);
   }
   return out;
 }
