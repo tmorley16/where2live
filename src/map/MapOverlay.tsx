@@ -14,19 +14,21 @@ function ViewSwitch() {
   const people = useScenario((s) => s?.people ?? []);
   const view = useScenario((s) => s?.settings.view);
   if (!view || people.length === 0) return null;
-  const options: { view: View; label: string; hint: string }[] = [
-    { view: { kind: 'combined' }, label: people.length > 1 ? 'Combined' : 'Total', hint: 'Everyone’s weekly travel added up' },
-    ...(people.length > 1
+  const options: { view: View; label: string; hint: string }[] =
+    people.length > 1
       ? [
+          { view: { kind: 'balanced' }, label: 'Balanced', hint: 'Your total weekly travel plus half the gap between you: low where it’s short and fairly shared' },
+          { view: { kind: 'combined' }, label: 'Total', hint: 'Everyone’s weekly travel added up' },
+          { view: { kind: 'fairest' }, label: 'Fairest', hint: 'The busier person’s weekly travel: low where neither of you travels a lot' },
           ...people.map((p) => ({ view: { kind: 'person', id: p.id } as View, label: p.name, hint: `${p.name}’s own weekly travel` })),
-          { view: { kind: 'fairest' } as View, label: 'Fairest', hint: 'The busier person’s weekly travel: low where neither of you travels a lot' },
         ]
-      : []),
-  ];
+      : [{ view: { kind: 'combined' }, label: 'Total', hint: 'Your weekly travel' }];
+  // With one person every view is the total.
+  const current: View = people.length > 1 ? view : { kind: 'combined' };
   return (
     <div className="seg" role="group" aria-label="Whose travel to show">
       {options.map((o) => (
-        <button key={o.label} type="button" className={sameView(o.view, view) ? 'on' : ''} aria-pressed={sameView(o.view, view)} title={o.hint} onClick={() => edit((d) => void (d.settings.view = o.view))}>
+        <button key={o.label} type="button" className={sameView(o.view, current) ? 'on' : ''} aria-pressed={sameView(o.view, current)} title={o.hint} onClick={() => edit((d) => void (d.settings.view = o.view))}>
           {o.label}
         </button>
       ))}
@@ -67,9 +69,11 @@ function Legend() {
   const who =
     view.kind === 'person'
       ? `${people.find((p) => p.id === view.id)?.name ?? 'One person'}’s weekly travel`
-      : view.kind === 'fairest'
+      : view.kind === 'fairest' && people.length > 1
         ? 'The busier person’s weekly travel'
-        : people.length > 1
+        : view.kind === 'balanced' && people.length > 1
+          ? 'Weekly travel, plus half the gap between you'
+          : people.length > 1
           ? accounting === 'household'
             ? 'Weekly travel, shared trips counted once'
             : 'Weekly travel, everyone added up'

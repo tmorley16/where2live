@@ -86,7 +86,8 @@ export interface Candidate {
   notes?: string;
 }
 
-export type View = { kind: 'combined' } | { kind: 'fairest' } | { kind: 'person'; id: Id };
+/** combined = the total; balanced = the total plus half the gap between people; fairest = the busier person. */
+export type View = { kind: 'balanced' } | { kind: 'combined' } | { kind: 'fairest' } | { kind: 'person'; id: Id };
 export type BandStyle = 'bands' | 'cells' | 'smooth';
 export type PaletteId = 'ylgnbu' | 'viridis' | 'magma';
 

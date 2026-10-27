@@ -2,6 +2,7 @@ import { legSpec, type FieldSpec } from '../domain/fields';
 import { tripsPerWeek } from '../domain/frequency';
 import { countedPeople, legMultiplier, tripCounts, tripPlace, tripTravellers } from '../domain/formula';
 import type { Frequency, Id, ModeId, Scenario } from '../domain/types';
+import { balancedValue } from './surface';
 
 export interface LegLine {
   /** Free-flow minutes for one leg. */
@@ -36,6 +37,8 @@ export interface Breakdown {
   combined: number;
   /** The busier person's weekly minutes. */
   fairest: number;
+  /** The total plus half the gap between people. */
+  balanced: number;
 }
 
 /**
@@ -72,5 +75,5 @@ export function breakdownAt(s: Scenario, legMinutes: (spec: FieldSpec) => number
     lines.push({ tripId: t.id, placeName: place.name, via, mode: t.mode, travellers: t.travellers, together: t.together, perWeek: w, frequency: t.frequency, out, back, overheadMin: overhead, perTraveller, counted, active });
   }
   const fairest = Math.max(0, ...persons.values());
-  return { lines, persons, combined, fairest };
+  return { lines, persons, combined, fairest, balanced: balancedValue(combined, persons.values()) };
 }

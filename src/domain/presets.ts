@@ -12,7 +12,7 @@ export const SYDNEY: LonLat = [151.15, -33.84];
 export function defaultSettings(): Settings {
   return {
     accounting: 'per-person',
-    view: { kind: 'combined' },
+    view: { kind: 'balanced' },
     trafficMultipliers: { ...DEFAULT_MULTIPLIERS },
     symmetric: { car: false, bike: false },
     area: { mode: 'auto' },
