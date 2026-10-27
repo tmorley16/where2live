@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { fmtTimes } from '../compute/overall';
 import { PALETTES } from '../compute/palettes';
 import { BAND_ORDER, TIME_BANDS } from '../domain/modes';
 import type { BandStyle, PaletteId, Scenario } from '../domain/types';
@@ -129,6 +130,29 @@ export function SettingsTab({ scenario }: { scenario: Scenario }) {
           onChange={(v) => edit((d) => void (d.settings.display.palette = v))}
         />
       </Row>
+      <Row label="Overall view shows" hint="Ranking: the best 5%, 10%… of spots. Total: your hours, faded where it’s uneven.">
+        <Seg
+          label="Overall view shows"
+          small
+          value={st.display.overall}
+          options={[
+            { id: 'ranked', label: 'Ranking' },
+            { id: 'faded', label: 'Total, faded if uneven' },
+          ]}
+          onChange={(v) => edit((d) => void (d.settings.display.overall = v))}
+        />
+      </Row>
+      {st.display.overall === 'faded' && (
+        <Row label="Fade where one of you travels over" hint="this many times as much as the other">
+          <Seg
+            label="Fade where one of you travels over"
+            small
+            value={String(st.display.uneven)}
+            options={[1.5, 2, 3].map((x) => ({ id: String(x), label: fmtTimes(x) }))}
+            onChange={(v) => edit((d) => void (d.settings.display.uneven = Number(v)))}
+          />
+        </Row>
+      )}
       <Row label="Strength">
         <input type="range" min={0.3} max={0.9} step={0.05} value={st.display.opacity} aria-label="Strength" onChange={(e) => edit((d) => void (d.settings.display.opacity = Number(e.target.value)))} />
       </Row>

@@ -18,7 +18,7 @@ export function defaultSettings(): Settings {
     symmetric: { car: false, bike: false },
     area: { mode: 'auto' },
     bands: { mode: 'absolute', step: 'auto' },
-    display: { style: 'bands', palette: 'ylgnbu', opacity: 0.6, edges: false },
+    display: { style: 'bands', palette: 'ylgnbu', opacity: 0.6, edges: false, overall: 'ranked', uneven: 2 },
     branchRouting: 'focus',
   };
 }

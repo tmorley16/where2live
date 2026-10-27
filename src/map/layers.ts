@@ -1,6 +1,6 @@
 import type { FeatureCollection } from 'geojson';
 import type { GeoJSONSource, ImageSource, Map as MlMap } from 'maplibre-gl';
-import { bandFeatures } from '../compute/contours';
+import { aboveFeatures, bandFeatures } from '../compute/contours';
 import type { Frame } from '../compute/engine';
 import { rasterPixels } from '../compute/raster';
 import type { Place, Settings } from '../domain/types';
@@ -55,6 +55,9 @@ export class SurfaceLayers {
       },
       before,
     );
+    // Overall, faded: a white wash where one person travels much more than another.
+    map.addSource('w2l-uneven', { type: 'geojson', data: EMPTY, maxzoom: 12 });
+    map.addLayer({ id: 'w2l-uneven', type: 'fill', source: 'w2l-uneven', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.6 } }, before);
     map.addSource('w2l-area', { type: 'geojson', data: EMPTY });
     map.addLayer({ id: 'w2l-area', type: 'line', source: 'w2l-area', paint: { 'line-color': '#5b6670', 'line-width': 1, 'line-dasharray': [3, 3], 'line-opacity': 0.7 } });
     // The branches of "any branch" places: small dots (a supermarket chain can have a hundred).
@@ -74,6 +77,7 @@ export class SurfaceLayers {
       if (!frame) {
         this.lastStyle = null;
         await (this.map.getSource('w2l-bands') as GeoJSONSource).setData(EMPTY);
+        await (this.map.getSource('w2l-uneven') as GeoJSONSource).setData(EMPTY);
         this.map.setLayoutProperty('w2l-cells', 'visibility', 'none');
         return;
       }
@@ -89,6 +93,8 @@ export class SurfaceLayers {
         (this.map.getSource('w2l-cells') as ImageSource).updateImage({ image: this.canvas, coordinates: windowCorners(frame.window) });
         if (this.lastStyle === 'bands' || this.lastStyle === null) await (this.map.getSource('w2l-bands') as GeoJSONSource).setData(EMPTY);
       }
+      const ov = frame.overall;
+      await (this.map.getSource('w2l-uneven') as GeoJSONSource).setData(ov?.look === 'faded' ? aboveFeatures(ov.ratio, frame.window, ov.uneven) : EMPTY);
       this.applyDisplay(display);
       this.lastStyle = display.style;
     });

@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import { engine } from '../compute/engine';
 import { fmtDelta, fmtDuration } from '../compute/format';
 import { homeResult, scenarioSpecs } from '../compute/homes';
+import { fairnessText, isOverall, rankText } from '../compute/overall';
 import { exactStore } from '../routing/exact';
 import { reverseGeocode } from '../routing/geocode';
 import { exact } from '../routing/wire';
@@ -15,7 +16,8 @@ import { useApp, useResult, useScenario, useUI } from './hooks';
 export function SpotCard() {
   const probe = useUI((u) => u.probe);
   const scenario = useScenario((s) => s);
-  const best = useResult((r) => r.frame?.stats.min ?? Number.NaN);
+  const best = useResult((r) => r.frame?.headline ?? Number.NaN);
+  const sorted = useResult((r) => r.frame?.stats.sorted);
   useResult((r) => r.frame?.version);
   const hasKey = useApp((a) => !!a.key);
   const busy = useStore(exactStore, (s) => s.busy > 0);
@@ -41,6 +43,8 @@ export function SpotCard() {
   const res = homeResult(scenario, probe, exact, engine, wantExact);
   if (!res) return null;
   const delta = res.value - best;
+  const overall = isOverall(scenario.settings.view, scenario.people);
+  const fair = overall ? fairnessText(res.breakdown.persons, scenario.people) : '';
   return (
     <section ref={card} className="spot" aria-label="This spot">
       <header className="spot-head">
@@ -54,10 +58,19 @@ export function SpotCard() {
       </header>
       <div className="spot-total">
         ≈ <strong>{fmtDuration(res.value)}</strong> a week{' '}
-        <span className="spot-delta">{Number.isFinite(delta) ? (fmtDelta(delta) === 'best' ? '· about the best there is' : `· ${fmtDelta(delta)} vs the best spot`) : ''}</span>
+        <span className="spot-delta">
+          {overall
+            ? sorted && `· ${rankText(sorted, res.breakdown.balanced)}`
+            : Number.isFinite(delta)
+              ? fmtDelta(delta) === 'best'
+                ? '· about the best there is'
+                : `· ${fmtDelta(delta)} vs the best spot`
+              : ''}
+        </span>
       </div>
       <div className="spot-badge">{res.exact ? 'Exact road times for this address' : res.estimate ? 'Straight-line estimate' : 'Read off the map (nearest calculated points)'}</div>
       {scenario.people.length > 1 && <PersonBars breakdown={res.breakdown} people={scenario.people} />}
+      {fair && <div className="spot-fair">{fair}</div>}
       <TripLines breakdown={res.breakdown} scenario={scenario} />
       <div className="inline wrap">
         {hasKey && !res.exact && (

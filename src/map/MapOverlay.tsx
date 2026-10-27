@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { fmtDelta, fmtDuration } from '../compute/format';
+import { fairnessText, fmtTimes, isOverall, rankText } from '../compute/overall';
 import type { BandStyle, View } from '../domain/types';
 import { edit } from '../state/scenarioStore';
 import { requestFit } from '../state/uiStore';
@@ -17,7 +18,7 @@ function ViewSwitch() {
   const options: { view: View; label: string; hint: string }[] =
     people.length > 1
       ? [
-          { view: { kind: 'balanced' }, label: 'Balanced', hint: 'Your total weekly travel plus half the gap between you: low where it’s short and fairly shared' },
+          { view: { kind: 'balanced' }, label: 'Overall', hint: 'The best spots overall: short travel, fairly shared between you. Hover for the details.' },
           { view: { kind: 'combined' }, label: 'Total', hint: 'Everyone’s weekly travel added up' },
           { view: { kind: 'fairest' }, label: 'Fairest', hint: 'The busier person’s weekly travel: low where neither of you travels a lot' },
           ...people.map((p) => ({ view: { kind: 'person', id: p.id } as View, label: p.name, hint: `${p.name}’s own weekly travel` })),
@@ -66,14 +67,15 @@ function Legend() {
   const places = useScenario((s) => s?.places ?? []);
   const accounting = useScenario((s) => s?.settings.accounting);
   if (!frame || !view || frame.bands.bands.length === 0) return null;
-  const who =
-    view.kind === 'person'
+  const ranked = frame.overall?.look === 'ranked';
+  const faded = frame.overall?.look === 'faded';
+  const who = ranked
+    ? 'The best spots overall: short travel, fairly shared'
+    : view.kind === 'person'
       ? `${people.find((p) => p.id === view.id)?.name ?? 'One person'}’s weekly travel`
       : view.kind === 'fairest' && people.length > 1
         ? 'The busier person’s weekly travel'
-        : view.kind === 'balanced' && people.length > 1
-          ? 'Weekly travel, plus half the gap between you'
-          : people.length > 1
+        : people.length > 1
           ? accounting === 'household'
             ? 'Weekly travel, shared trips counted once'
             : 'Weekly travel, everyone added up'
@@ -87,7 +89,7 @@ function Legend() {
             <i key={b.lower} style={{ background: b.colour }} />
           ))}
         </span>
-        {fmtDuration(frame.bands.base)} – {fmtDuration(frame.bands.top)}
+        {ranked ? 'Best spots overall' : `${fmtDuration(frame.bands.base)} – ${fmtDuration(frame.bands.top)}`}
       </button>
     );
   return (
@@ -105,9 +107,15 @@ function Legend() {
             {b.label}
           </li>
         ))}
+        {faded && (
+          <li>
+            <span className="swatch swatch-faded" style={{ background: frame.bands.bands[Math.min(1, frame.bands.bands.length - 1)].colour }} />
+            Faded: one of you travels over {fmtTimes(frame.overall!.uneven)} as much as the other
+          </li>
+        )}
         <li className="legend-muted">
           <span className="swatch swatch-none" />
-          Unshaded: over {fmtDuration(frame.bands.top)}, or no homes
+          {ranked ? 'Unshaded: the rest of the map, or no homes' : `Unshaded: over ${fmtDuration(frame.bands.top)}, or no homes`}
         </li>
       </ul>
       {frame.estimate && <div className="legend-note badge-estimate">Rough estimates (straight-line distance)</div>}
@@ -118,9 +126,38 @@ function Legend() {
 
 function HoverTip() {
   const hover = useUI((u) => u.hover);
-  const best = useResult((r) => r.frame?.stats.min ?? Number.NaN);
+  const best = useResult((r) => r.frame?.headline ?? Number.NaN);
+  const sorted = useResult((r) => r.frame?.stats.sorted);
   const people = useScenario((s) => s?.people ?? []);
+  const overall = useScenario((s) => isOverall(s?.settings.view, people));
   if (!hover) return null;
+  const bd = hover.breakdown;
+  if (overall) {
+    if (!bd) return null;
+    const sum = people.reduce((a, p) => a + (bd.persons.get(p.id) ?? 0), 0);
+    return (
+      <div className="hovertip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+        <div className="hovertip-main">≈ {fmtDuration(bd.combined)} a week in all</div>
+        {sum > 0 && (
+          <div className="share" aria-hidden="true">
+            {people.map((p) => (
+              <i key={p.id} style={{ width: `${((bd.persons.get(p.id) ?? 0) / sum) * 100}%`, background: p.colour }} />
+            ))}
+          </div>
+        )}
+        <div className="hovertip-people">
+          {people.map((p) => (
+            <span key={p.id}>
+              <i style={{ background: p.colour }} />
+              {p.name} {fmtDuration(bd.persons.get(p.id) ?? 0)}
+            </span>
+          ))}
+        </div>
+        <div className="hovertip-sub">{fairnessText(bd.persons, people)}</div>
+        {sorted && <div className="hovertip-sub">{rankText(sorted, bd.balanced)}</div>}
+      </div>
+    );
+  }
   const varies = hover.hi - hover.lo > 0.2 * hover.value;
   return (
     <div className="hovertip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
@@ -154,7 +191,7 @@ function StatusChip() {
   if (!frame) return null;
   return (
     <div className="chip chip-status">
-      Best area ≈ <strong>{fmtDuration(frame.stats.min)}</strong> a week
+      Best area ≈ <strong>{fmtDuration(frame.headline)}</strong> a week
     </div>
   );
 }

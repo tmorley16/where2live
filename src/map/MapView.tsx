@@ -78,7 +78,7 @@ export default function MapView() {
         const s = getScenario();
         layers.render(frame, s?.settings.display ?? defaultSettings().display);
         layers.showArea(frame ? area : null); // no outline until there's something to show in it
-        best.show(frame?.best ?? null, frame?.stats.min ?? Number.NaN);
+        best.show(frame?.best ?? null, frame?.headline ?? Number.NaN);
         places.sync(s?.places ?? [], new Set(area?.far ?? []));
         if (!fitted && area) {
           fitArea(map, area, false);

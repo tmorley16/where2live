@@ -101,7 +101,11 @@ export interface Settings {
   symmetric: { car: boolean; bike: boolean };
   area: { mode: 'auto' } | { mode: 'manual'; bbox: BBox };
   bands: { mode: 'absolute' | 'relative'; step: number | 'auto' };
-  display: { style: BandStyle; palette: PaletteId; opacity: number; edges: boolean };
+  /**
+   * overall: how the Overall (balanced) view is drawn: ranked (colours = how a spot ranks, best 5% … 60%) or faded
+   * (colours = the total hours, washed out where one person travels over `uneven` times as much as another).
+   */
+  display: { style: BandStyle; palette: PaletteId; opacity: number; edges: boolean; overall: 'ranked' | 'faded'; uneven: number };
   /**
    * Road times for "any branch" places: only where the map is promising (the better 40% of it; elsewhere the
    * straight-line estimate, since one short trip barely changes a poor area), or everywhere.

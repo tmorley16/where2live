@@ -10,7 +10,8 @@ export interface Band {
 }
 
 export interface Bands {
-  mode: 'absolute' | 'relative';
+  /** rank: the Overall view, banded by how a spot ranks against the rest of the map. */
+  mode: 'absolute' | 'relative' | 'rank';
   /** Band width in minutes a week (absolute mode). */
   step: number;
   bands: Band[];
@@ -57,6 +58,18 @@ export function makeBands(min: number, p90: number, mode: 'absolute' | 'relative
     return { lower, upper, colour, label: `${fmtEdge(lower)} – ${fmtEdge(upper)}` };
   });
   return { mode, step: s, bands, top: bands[n - 1].upper, base };
+}
+
+/** How the Overall view bands the map: the best 5% of spots, then the best 10%, and so on to 60%. */
+export const RANKS = [0.05, 0.1, 0.2, 0.3, 0.45, 0.6];
+
+/** Bands by rank, from every valid value in ascending order. */
+export function rankBands(sorted: Float32Array, palette: PaletteId): Bands {
+  if (sorted.length === 0) return { mode: 'rank', step: 0, bands: [], top: Number.NaN, base: Number.NaN };
+  const colours = bandColours(palette, RANKS.length);
+  const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
+  const bands = RANKS.map((q, k) => ({ lower: k === 0 ? sorted[0] : at(RANKS[k - 1]), upper: at(q), colour: colours[k], label: `Top ${Math.round(q * 100)}%` }));
+  return { mode: 'rank', step: 0, bands, top: bands[bands.length - 1].upper, base: sorted[0] };
 }
 
 /** Index of the band holding a value, or −1 when unshaded. */

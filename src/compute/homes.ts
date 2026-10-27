@@ -7,7 +7,7 @@ import type { Engine } from './engine';
 
 export interface HomeResult {
   breakdown: Breakdown;
-  /** The value for the current view (household, balanced, one person, or the busier person). */
+  /** The weekly minutes for the current view (household, one person, or the busier person; Overall shows the household total). */
   value: number;
   /** From exact routing for this address (not read off the grid, not an estimate). */
   exact: boolean;
@@ -18,7 +18,6 @@ export interface HomeResult {
 export function viewValue(bd: Breakdown, view: View): number {
   if (view.kind === 'person') return bd.persons.get(view.id) ?? Number.NaN;
   if (view.kind === 'fairest') return bd.fairest;
-  if (view.kind === 'balanced') return bd.balanced;
   return bd.combined;
 }
 

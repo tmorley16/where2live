@@ -2,6 +2,7 @@ import { useStore } from 'zustand';
 import { engine } from '../compute/engine';
 import { fmtDelta, fmtDuration } from '../compute/format';
 import { homeResult, letter } from '../compute/homes';
+import { fairnessText, isOverall, rankText } from '../compute/overall';
 import type { LonLat, Scenario } from '../domain/types';
 import { exactStore } from '../routing/exact';
 import { exact } from '../routing/wire';
@@ -15,10 +16,14 @@ export function ShortlistTab({ scenario }: { scenario: Scenario }) {
   const busy = useStore(exactStore, (s) => s.busy > 0);
   const error = useStore(exactStore, (s) => s.error);
   useResult((r) => r.frame?.version);
-  const best = useResult((r) => r.frame?.stats.min ?? Number.NaN);
+  const best = useResult((r) => r.frame?.headline ?? Number.NaN);
+  const ranks = useResult((r) => r.frame?.stats.sorted);
+  const overall = isOverall(scenario.settings.view, scenario.people);
   const near = useResult((r) => r.area?.centre) ?? scenario.region.centre;
   const rows = scenario.candidates.map((c, i) => ({ c, letter: letter(i), res: homeResult(scenario, c.location, exact, engine, true) }));
-  const sorted = [...rows].sort((a, b) => (a.res?.value ?? Infinity) - (b.res?.value ?? Infinity));
+  // Overall: best first by short and fairly shared travel.
+  const key = (res: (typeof rows)[number]['res']) => (res ? (overall ? res.breakdown.balanced : res.value) : Infinity);
+  const sorted = [...rows].sort((a, b) => key(a.res) - key(b.res));
   const names = new Map(scenario.people.map((p) => [p.id, p]));
 
   return (
@@ -44,7 +49,15 @@ export function ShortlistTab({ scenario }: { scenario: Scenario }) {
               {res && (
                 <div className="cand-total">
                   <strong>{fmtDuration(res.value)}</strong> a week
-                  <span className="spot-delta">{Number.isFinite(best) ? (fmtDelta(res.value - best) === 'best' ? ' · about the best there is' : ` · ${fmtDelta(res.value - best)} vs the best spot`) : ''}</span>
+                  <span className="spot-delta">
+                    {overall
+                      ? ranks && ` · ${rankText(ranks, res.breakdown.balanced)}`
+                      : Number.isFinite(best)
+                        ? fmtDelta(res.value - best) === 'best'
+                          ? ' · about the best there is'
+                          : ` · ${fmtDelta(res.value - best)} vs the best spot`
+                        : ''}
+                  </span>
                   <span className={`tag${res.exact ? ' tag-exact' : ''}`}>{res.exact ? 'exact' : res.estimate ? 'estimate' : 'from map'}</span>
                 </div>
               )}
@@ -56,6 +69,7 @@ export function ShortlistTab({ scenario }: { scenario: Scenario }) {
                       {p.name} {fmtDuration(res.breakdown.persons.get(p.id) ?? 0)}
                     </span>
                   ))}
+                  {overall && <span className="cand-fair">{fairnessText(res.breakdown.persons, scenario.people)}</span>}
                 </div>
               )}
               <div className="cand-fields">

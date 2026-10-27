@@ -9,20 +9,26 @@ import { estimateNearest } from '../routing/estimate';
 import { EstimateProvider, type FieldProvider } from '../routing/provider';
 import { scenarioStore } from '../state/scenarioStore';
 import { uiStore } from '../state/uiStore';
-import { makeBands, type Bands } from './bands';
+import { makeBands, rankBands, type Bands } from './bands';
 import { breakdownAt, type Breakdown } from './breakdown';
 import { sampleAt } from './sample';
-import { applyMask, stats, viewValues, type Stats } from './surface';
+import { applyMask, overallValues, stats, viewValues, type Stats } from './surface';
 
 /** One computed surface, ready to draw. */
 export interface Frame {
   version: number;
   window: GridWindow;
+  /** What's drawn: the view's values (for Overall, the balanced score when ranked, the total when faded). */
   values: Float32Array;
+  /** Of the values the best spot is chosen by (for Overall, the balanced score; `sorted` ranks a spot). */
   stats: Stats;
   bands: Bands;
   area: Area;
   best: LonLat | null;
+  /** Weekly minutes at the best spot, as people read them (for Overall, the household total there). */
+  headline: number;
+  /** The Overall view: how it's drawn, and the busiest person's travel over the least busy one's (NaN where unshaded). */
+  overall: { look: 'ranked' | 'faded'; ratio: Float32Array; uneven: number } | null;
   /** Every field is a straight-line estimate. */
   estimate: boolean;
   /** Points still provisional (interpolated or estimated) while real times load. */
@@ -182,8 +188,12 @@ export class Engine {
       estimate &&= inf.estimate;
       provisional += inf.provisional;
     }
-    const values = viewValues(forms, s.settings.view, this.dense, w.nx * w.ny);
-    applyMask(values, this.combinedMask());
+    // Overall ranks spots by the balanced score, but every number it shows is the real total.
+    const n = w.nx * w.ny;
+    const mask = this.combinedMask();
+    const ov = s.settings.view.kind === 'balanced' ? overallValues(forms, this.dense, n) : null;
+    const values = ov ? ov.score : viewValues(forms, s.settings.view, this.dense, n);
+    applyMask(values, mask);
     const st = stats(values);
     // Tell the provider what's needed, biggest weekly weight first. Not while dragging: a drag never fetches.
     // "Any branch" places get road times only where the map is promising (the better 40%), unless set otherwise.
@@ -197,17 +207,36 @@ export class Engine {
       }
       this.provider.need(w, this.ids, needs, focus);
     }
-    const { mode, step } = s.settings.bands;
-    const palette = s.settings.display.palette;
+    const { step } = s.settings.bands;
+    const { palette, overall: look, uneven } = s.settings.display;
+    // Drawn: the score's rank (Overall, ranked), the total (Overall, faded), or the view's own values.
+    let shown = values;
+    let shownSt = st;
+    if (ov && look === 'faded') {
+      shown = ov.total;
+      applyMask(shown, mask);
+      shownSt = stats(shown);
+    }
+    const mode = ov && look === 'ranked' ? 'rank' : s.settings.bands.mode;
     // While dragging, keep the band edges so colours keep their meaning, unless the values drift well outside them.
+    // Ranked bands always mean "the best x%", so they follow the drag.
     const f = this.frozen;
     const slack = f ? f.bands.step || 30 : 0;
-    const keep = dragging && f && f.palette === palette && f.mode === mode && f.step === step && st.min >= f.bands.base - slack && st.p90 <= f.bands.top + slack;
-    const bands = keep ? f!.bands : makeBands(st.min, st.p90, mode, step, palette);
+    const keep =
+      dragging && mode !== 'rank' && f && f.palette === palette && f.mode === mode && f.step === step && shownSt.min >= f.bands.base - slack && shownSt.p90 <= f.bands.top + slack;
+    const bands = keep ? f!.bands : mode === 'rank' ? rankBands(st.sorted, palette) : makeBands(shownSt.min, shownSt.p90, mode, step, palette);
     this.frozen = dragging ? { bands, palette, mode, step } : null;
+    let overall: Frame['overall'] = null;
+    if (ov) {
+      // Fade only what's shaded.
+      const ratio = ov.ratio;
+      for (let i = 0; i < n; i++) if (!(shown[i] <= bands.top)) ratio[i] = Number.NaN;
+      overall = { look, ratio, uneven };
+    }
     const best = st.argmin >= 0 ? fromMercator(elementMercator(w, st.argmin % w.nx, Math.floor(st.argmin / w.nx))) : null;
+    const headline = ov && st.argmin >= 0 ? ov.total[st.argmin] : st.min;
     resultStore.setState({
-      frame: { version: ++this.version, window: w, values, stats: st, bands, area: this.area!, best, estimate, provisional },
+      frame: { version: ++this.version, window: w, values: shown, stats: st, bands, area: this.area!, best, headline, overall, estimate, provisional },
       area: this.area,
       empty: null,
     });

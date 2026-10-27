@@ -52,6 +52,36 @@ export function viewValues(forms: Forms, view: View, dense: Map<string, Float32A
   return out;
 }
 
+/** The Overall view's surfaces: the household total, the balanced score it ranks by, and how uneven the travel is. */
+export interface Overall {
+  total: Float32Array;
+  score: Float32Array;
+  /** The busiest person's weekly travel over the least busy one's (1 = even). People with no trips are left out. */
+  ratio: Float32Array;
+}
+
+/** Null with fewer than two people who travel. */
+export function overallValues(forms: Forms, dense: Map<string, Float32Array>, n: number): Overall | null {
+  const persons = [...forms.persons.values()].filter((f) => f.coef.size > 0 || f.constant !== 0).map((f) => evaluateForm(f, dense, n));
+  if (persons.length < 2) return null;
+  const total = evaluateForm(forms.combined, dense, n);
+  const score = new Float32Array(n);
+  const ratio = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let max = -Infinity;
+    let min = Infinity;
+    let sum = 0;
+    for (const v of persons) {
+      max = Math.max(max, v[i]);
+      min = Math.min(min, v[i]);
+      sum += v[i];
+    }
+    score[i] = total[i] + BALANCE * (persons.length * max - sum);
+    ratio[i] = min > 0 ? max / min : max > 0 ? 1e6 : 1;
+  }
+  return { total, score, ratio };
+}
+
 export interface Stats {
   min: number;
   max: number;
@@ -61,6 +91,8 @@ export interface Stats {
   /** Element index of the best point, −1 if none. */
   argmin: number;
   valid: number;
+  /** Every valid value, ascending (for ranking a spot against the map). */
+  sorted: Float32Array;
 }
 
 export function applyMask(values: Float32Array, mask: Uint8Array | null): void {
@@ -83,10 +115,23 @@ export function stats(values: Float32Array): Stats {
     }
     if (v > max) max = v;
   }
-  if (valid === 0) return { min: Number.NaN, max: Number.NaN, p90: Number.NaN, p40: Number.NaN, argmin: -1, valid };
+  if (valid === 0) return { min: Number.NaN, max: Number.NaN, p90: Number.NaN, p40: Number.NaN, argmin: -1, valid, sorted: new Float32Array(0) };
   const sorted = new Float32Array(valid);
   let k = 0;
   for (let i = 0; i < values.length; i++) if (Number.isFinite(values[i])) sorted[k++] = values[i];
   sorted.sort();
-  return { min, max, p90: sorted[Math.floor(0.9 * (valid - 1))], p40: sorted[Math.floor(0.4 * (valid - 1))], argmin, valid };
+  return { min, max, p90: sorted[Math.floor(0.9 * (valid - 1))], p40: sorted[Math.floor(0.4 * (valid - 1))], argmin, valid, sorted };
+}
+
+/** The share of the map (0–1) that does better than this value. */
+export function rankOf(sorted: Float32Array, v: number): number {
+  if (!sorted.length || !Number.isFinite(v)) return Number.NaN;
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] < v) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo / sorted.length;
 }

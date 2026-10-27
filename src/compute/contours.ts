@@ -32,3 +32,13 @@ export function bandFeatures(values: Float32Array, w: GridWindow, b: Bands): Fea
   }
   return { type: 'FeatureCollection', features };
 }
+
+/** Where a surface is at or above a level, as one polygon feature (NaN points are left out). */
+export function aboveFeatures(values: Float32Array, w: GridWindow, level: number): FeatureCollection<MultiPolygon> {
+  const vals = Float64Array.from(values);
+  const shape = contours().size([w.nx, w.ny]).contour(vals as unknown as number[], level);
+  if (shape.coordinates.length === 0) return { type: 'FeatureCollection', features: [] };
+  const toLonLat = ([x, y]: number[]) => fromMercator([(w.i0 + x - 0.5) * w.s, (w.jTop - (y - 0.5)) * w.s]);
+  const coordinates = shape.coordinates.map((poly) => poly.map((ring) => ring.map(toLonLat)));
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates } }] };
+}

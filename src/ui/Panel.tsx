@@ -22,10 +22,10 @@ function Summary() {
     <div className="summary">
       <div className="summary-main">
         {warm ? 'Best area: ' : 'Best area ≈ '}
-        <strong>{fmtDuration(frame.stats.min)}</strong> a week
+        <strong>{fmtDuration(frame.headline)}</strong> a week
       </div>
       <div className="summary-sub">
-        {warm ? `About ${fmtDuration(frame.stats.min / 7)} a day` : fmtHoursPerYear(frame.stats.min)}
+        {warm ? `About ${fmtDuration(frame.headline / 7)} a day` : fmtHoursPerYear(frame.headline)}
         {bd && people.length > 1 && ` · ${people.map((p) => `${p.name} ${fmtDuration(bd.persons.get(p.id) ?? 0)}`).join(' · ')}`}
       </div>
       <RoutingNotice />
