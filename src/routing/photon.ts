@@ -11,6 +11,30 @@ export interface GeocodeResult {
 
 const cache = new Map<string, GeocodeResult[]>();
 
+/**
+ * Photon is a free service that is sometimes slow or down. Requests give up after 6 s, and after a failure Photon is
+ * skipped for 3 minutes, so searches go straight to the alternatives instead of waiting.
+ */
+let downUntil = 0;
+
+export function photonAvailable(): boolean {
+  return Date.now() >= downUntil;
+}
+
+export async function photonFetch(url: URL, signal?: AbortSignal): Promise<Response> {
+  if (!photonAvailable()) throw new Error('Photon is unavailable');
+  const timeout = AbortSignal.timeout(6000);
+  try {
+    const res = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    if (!res.ok) throw new Error(`Search failed (${res.status})`);
+    return res;
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    downUntil = Date.now() + 180_000;
+    throw new Error('Photon is unavailable');
+  }
+}
+
 interface PhotonProps {
   name?: string;
   housenumber?: string;
@@ -47,8 +71,7 @@ export async function photonSearch(q: string, near: LonLat, country: string | un
   url.searchParams.set('lat', String(near[1]));
   url.searchParams.set('lon', String(near[0]));
   if (country) url.searchParams.set('countrycode', country);
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`Search failed (${res.status})`);
+  const res = await photonFetch(url, signal);
   const json = (await res.json()) as { features?: { geometry: { coordinates: [number, number] }; properties: PhotonProps }[] };
   const out = (json.features ?? []).map((f) => ({
     ...label(f.properties),
@@ -66,8 +89,8 @@ export async function photonReverse(p: LonLat, signal?: AbortSignal): Promise<Ge
   url.searchParams.set('lat', String(p[1]));
   url.searchParams.set('lang', 'en');
   url.searchParams.set('limit', '1');
-  const res = await fetch(url, { signal });
-  if (!res.ok) return null;
+  const res = await photonFetch(url, signal).catch(() => null);
+  if (!res) return null;
   const json = (await res.json()) as { features?: { geometry: { coordinates: [number, number] }; properties: PhotonProps }[] };
   const f = json.features?.[0];
   return f ? { ...label(f.properties), location: p, country: f.properties.countrycode?.toUpperCase() } : null;

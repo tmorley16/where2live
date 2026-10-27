@@ -32,3 +32,18 @@ export async function peliasAutocomplete(text: string, near: LonLat, country: st
   cache.set(ck, out);
   return out;
 }
+
+/** The address at a point (naming a clicked spot), with the user's key. */
+export async function peliasReverse(p: LonLat, key: string, signal?: AbortSignal): Promise<GeocodeResult | null> {
+  const url = new URL('https://api.heigit.org/pelias/v1/reverse');
+  url.searchParams.set('point.lon', String(p[0]));
+  url.searchParams.set('point.lat', String(p[1]));
+  url.searchParams.set('size', '1');
+  url.searchParams.set('layers', 'address,street');
+  const res = await fetch(url, { headers: { Authorization: key }, signal });
+  if (!res.ok) return null;
+  const f = ((await res.json()) as { features?: PeliasFeature[] }).features?.[0];
+  if (!f) return null;
+  const label = (f.properties.label ?? f.properties.name ?? 'Place').replace(/, Australia$/, '');
+  return { label, name: f.properties.name ?? label.split(',')[0], location: p, country: f.properties.country_code?.toUpperCase() };
+}

@@ -1,5 +1,6 @@
 import { engine } from '../compute/engine';
 import { fmtDuration, fmtHoursPerYear } from '../compute/format';
+import { setScenario } from '../state/scenarioStore';
 import { uiStore, type Tab } from '../state/uiStore';
 import { useResult, useScenario, useUI } from './hooks';
 import { PeopleBar } from './PeopleBar';
@@ -49,6 +50,14 @@ export function Panel() {
         <Welcome />
       ) : (
         <>
+          {scenario.demo && (
+            <div className="demo-bar">
+              <span>You’re looking at the demo</span>
+              <button type="button" className="btn btn-primary" onClick={() => setScenario(null)}>
+                Exit demo
+              </button>
+            </div>
+          )}
           <Summary />
           <SpotCard />
           <PeopleBar people={scenario.people} />

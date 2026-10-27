@@ -14,7 +14,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://tiles.openfreemap.org",
   // data: is the image layer's placeholder, fetched by MapLibre; it never leaves the browser.
-  "connect-src 'self' data: https://api.heigit.org https://photon.komoot.io https://tiles.openfreemap.org",
+  "connect-src 'self' data: https://api.heigit.org https://photon.komoot.io https://nominatim.openstreetmap.org https://tiles.openfreemap.org",
   "font-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",

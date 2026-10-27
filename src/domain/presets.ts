@@ -5,7 +5,8 @@ export function newId(): Id {
   return crypto.randomUUID().slice(0, 8);
 }
 
-export const PERSON_COLOURS = ['#c2255c', '#e8590c', '#7048e8', '#2b8a3e', '#495057'];
+/** Basic colours to choose from for each person (the first five are the defaults, in order). */
+export const PERSON_COLOURS = ['#c2255c', '#e8590c', '#7048e8', '#2b8a3e', '#495057', '#e03131', '#f08c00', '#1c7ed6', '#0c8599', '#9c36b5', '#795548', '#000000'];
 
 export const SYDNEY: LonLat = [151.15, -33.84];
 
@@ -77,7 +78,7 @@ export function newScenario(centre: LonLat = SYDNEY, country = 'AU'): Scenario {
     schema: 1,
     name: 'Our places',
     region: { country, centre },
-    people: [newPerson('You', 0), newPerson('Partner', 1)],
+    people: [newPerson('Person 1', 0), newPerson('Person 2', 1)],
     places: [],
     trips: [],
     candidates: [],
@@ -89,6 +90,7 @@ export function newScenario(centre: LonLat = SYDNEY, country = 'AU'): Scenario {
 export function demoScenario(): Scenario {
   const s = newScenario(SYDNEY, 'AU');
   s.name = 'Demo: Sam and Alex';
+  s.demo = true;
   const [sam, alex] = [newPerson('Sam', 0), newPerson('Alex', 1)];
   s.people = [sam, alex];
   const place = (name: string, category: PlaceCategory, lon: number, lat: number) => newPlace(name, category, [lon, lat]);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LonLat } from '../domain/types';
-import { searchCredit, searchPlaces } from '../routing/geocode';
+import { liveSearch, searchCredit, searchOnce, searchPlaces } from '../routing/geocode';
 import { parseCoordinates, type GeocodeResult } from '../routing/photon';
 
 /**
@@ -25,7 +25,7 @@ export function PlaceSearch({
   const [q, setQ] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [active, setActive] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'busy' | 'none' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'busy' | 'none' | 'error' | 'enter'>('idle');
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,6 +41,12 @@ export function PlaceSearch({
       setStatus('idle');
       return;
     }
+    // Suggestions as you type aren't available (no key, Photon down): search when Enter is pressed.
+    if (!liveSearch()) {
+      setResults([]);
+      setStatus('enter');
+      return;
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       setStatus('busy');
@@ -51,7 +57,7 @@ export function PlaceSearch({
           setStatus(r.length ? 'idle' : 'none');
         })
         .catch((e: unknown) => {
-          if ((e as Error).name !== 'AbortError') setStatus('error');
+          if ((e as Error).name !== 'AbortError') setStatus(liveSearch() ? 'error' : 'enter');
         });
     }, 300);
     return () => {
@@ -59,6 +65,17 @@ export function PlaceSearch({
       ctrl.abort();
     };
   }, [q, near[0], near[1], country]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const searchNow = () => {
+    setStatus('busy');
+    searchOnce(q.trim(), near, country)
+      .then((r) => {
+        setResults(r);
+        setActive(0);
+        setStatus(r.length ? 'idle' : 'none');
+      })
+      .catch(() => setStatus('error'));
+  };
 
   const choose = (r: GeocodeResult) => {
     onChoose(r);
@@ -88,6 +105,9 @@ export function PlaceSearch({
           } else if (e.key === 'Enter' && results[active]) {
             e.preventDefault();
             choose(results[active]);
+          } else if (e.key === 'Enter' && status === 'enter') {
+            e.preventDefault();
+            searchNow();
           } else if (e.key === 'Escape') {
             if (q) setQ('');
             else onCancel?.();
@@ -103,7 +123,12 @@ export function PlaceSearch({
           ))}
           {status === 'busy' && results.length === 0 && <li className="search-note">Searching…</li>}
           {status === 'none' && <li className="search-note">Nothing found. Try a suburb, or pick the spot on the map.</li>}
-          {status === 'error' && <li className="search-note">Search isn’t available right now. Pick the spot on the map instead.</li>}
+          {status === 'enter' && (
+            <li className="search-note search-enter" onMouseDown={(e) => e.preventDefault()} onClick={searchNow}>
+              Press Enter to search (suggestions as you type are unavailable right now)
+            </li>
+          )}
+          {status === 'error' && <li className="search-note">Search isn’t available right now. Try again in a minute, paste coordinates, or pick the spot on the map.</li>}
           <li className="search-credit">{searchCredit()}</li>
         </ul>
       )}

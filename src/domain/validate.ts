@@ -81,5 +81,5 @@ export function parseScenario(raw: unknown): Scenario | null {
   settings.display = { ...d.display, ...(isObj(st.display) ? st.display : {}) } as Scenario['settings']['display'];
   if (!isObj(st.view) || !['combined', 'fairest', 'person'].includes(String(st.view.kind))) settings.view = d.view;
   if (!isObj(st.area) || (st.area.mode === 'manual' && !Array.isArray(st.area.bbox))) settings.area = d.area;
-  return { schema: 1, name: String(raw.name ?? 'Our places'), region, people, places, trips, candidates, settings };
+  return { schema: 1, ...(raw.demo === true ? { demo: true } : {}), name: String(raw.name ?? 'Our places'), region, people, places, trips, candidates, settings };
 }

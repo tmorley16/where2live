@@ -3,6 +3,7 @@ import type { BBox, LonLat, PlaceOption } from '../domain/types';
 import { areaBBox, type Area } from '../grid/area';
 import { haversine } from '../grid/mercator';
 import { appStore } from '../state/appStore';
+import { photonFetch } from './photon';
 
 /** Australia's main supermarket chains, offered as one-click choices for a supermarket. */
 export const SUPERMARKET_CHAINS = ['Woolworths', 'Coles', 'Aldi', 'IGA', 'Harris Farm'];
@@ -74,7 +75,7 @@ const photon: Source = {
     url.searchParams.set('bbox', box.join(','));
     url.searchParams.set('limit', '50');
     url.searchParams.set('lang', 'en');
-    const json = await getJSON<{ features?: PhotonFeature[] }>(url, { signal });
+    const json = (await (await slot(() => photonFetch(url, signal))).json()) as { features?: PhotonFeature[] };
     return (json.features ?? []).map((f) => {
       const p = f.properties;
       return {

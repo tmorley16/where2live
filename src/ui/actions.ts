@@ -60,7 +60,7 @@ export function exportScenario(): void {
 export function addPerson(): void {
   edit((d) => {
     if (d.people.length >= 5) return;
-    d.people.push(newPerson(d.people.length === 1 ? 'Partner' : `Person ${d.people.length + 1}`, d.people.length));
+    d.people.push(newPerson(`Person ${d.people.length + 1}`, d.people.length));
   });
 }
 

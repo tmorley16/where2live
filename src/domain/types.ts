@@ -110,6 +110,8 @@ export interface Settings {
 
 export interface Scenario {
   schema: 1;
+  /** The fictional demo (shows an Exit demo button). */
+  demo?: boolean;
   name: string;
   region: { country: string; centre: LonLat };
   people: Person[];

@@ -4,7 +4,7 @@ import { engine } from '../compute/engine';
 import { fmtDelta, fmtDuration } from '../compute/format';
 import { homeResult, scenarioSpecs } from '../compute/homes';
 import { exactStore } from '../routing/exact';
-import { photonReverse } from '../routing/photon';
+import { reverseGeocode } from '../routing/geocode';
 import { exact } from '../routing/wire';
 import { uiStore } from '../state/uiStore';
 import { addCandidate } from './actions';
@@ -31,7 +31,7 @@ export function SpotCard() {
     // On a phone the panel sits under the map: bring the card into view.
     if (globalThis.matchMedia?.('(max-width: 760px)').matches) requestAnimationFrame(() => card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
     const ctrl = new AbortController();
-    photonReverse(probe, ctrl.signal)
+    reverseGeocode(probe, ctrl.signal)
       .then((r) => setLabel(r?.label ?? null))
       .catch(() => {});
     return () => ctrl.abort();
