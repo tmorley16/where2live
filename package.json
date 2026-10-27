@@ -1,0 +1,36 @@
+{
+  "name": "where2live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Where should we live? Maps the total weekly travel time from every possible home to the places you go regularly.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "spike": "node scripts/spike-ors.mjs"
+  },
+  "dependencies": {
+    "d3-contour": "4.0.2",
+    "idb-keyval": "6.3.0",
+    "maplibre-gl": "6.15.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zustand": "5.0.16"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/d3-contour": "3.0.6",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

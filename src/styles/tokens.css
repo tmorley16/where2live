@@ -1,0 +1,30 @@
+/* Design tokens. Light, quiet and clean: the map and its bands carry the colour. */
+:root {
+  --bg: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #f7f7f5;
+  --line: #e2e2dd;
+  --line-strong: #cfcfc8;
+  --text: #1d2125;
+  --text-2: #4f5961;
+  --text-3: #7a848c;
+  --accent: #225ea8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6eef8;
+  --warn: #9a5b00;
+  --warn-soft: #fff4dc;
+  --danger: #a3262a;
+  --danger-soft: #fbe9e9;
+  --ok: #1f7a4d;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --gap: 12px;
+  --panel-width: 400px;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-num: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
+  --size: 14px;
+  --size-sm: 12.5px;
+  --size-lg: 16px;
+}

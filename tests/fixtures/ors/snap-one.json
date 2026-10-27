@@ -1,0 +1,35 @@
+{
+ "locations": [
+  {
+   "location": [
+    151.205688,
+    -33.865701
+   ],
+   "name": "York Street",
+   "snapped_distance": 1.11
+  }
+ ],
+ "metadata": {
+  "attribution": "© openrouteservice by HeiGIT | Data from OpenStreetMap",
+  "service": "snap",
+  "timestamp": 1793101007834,
+  "query": {
+   "locations": [
+    [
+     151.2057,
+     -33.8657
+    ]
+   ],
+   "profile": "driving-car",
+   "profileName": "driving-car",
+   "format": "json",
+   "radius": 300
+  },
+  "engine": {
+   "version": "9.10.0",
+   "build_date": "2026-08-13T11:53:14Z",
+   "graph_date": "2026-09-21T10:31:27Z",
+   "osm_date": "2026-09-13T23:59:59Z"
+  }
+ }
+}

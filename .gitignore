@@ -1,0 +1,20 @@
+# dependencies and build output
+node_modules/
+dist/
+
+# test artefacts
+test-results/
+test-results-*/
+playwright-report/
+*.tmp.config.ts
+
+# personal Claude Code settings
+.claude/settings.local.json
+
+# secrets: the ORS key for scripts lives in .env.local (never commit it)
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
